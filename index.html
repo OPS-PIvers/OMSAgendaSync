@@ -1,754 +1,601 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <base target="_top">
+  <title>Daily Teacher Agendas</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- jsPDF and html2canvas for PDF generation -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <!-- Font Awesome for collapse/expand icons -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <style>
     body {
       font-family: 'Inter', sans-serif;
-      min-height: 100vh;
+      background-color: #f8fafc;
+      color: #1f2937;
+    }
+
+    /* --- Grade Navigation Tabs --- */
+    .grade-nav-container {
+      position: relative;
+      background-color: #e5e7eb;
+      border-radius: 9999px;
+      padding: 0.25rem;
       display: flex;
-      flex-direction: column;
-      background-color: #f3f4f6; /* Light gray background */
+      width: fit-content;
+      margin: 0 auto;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* Custom Grade Button Colors */
-    .bg-grade-6th { background-color: #4f46e5; border-color: #4338ca; } /* Indigo-600, darker border */
-    .bg-grade-6th:hover { background-color: #4338ca; } /* Indigo-700 */
-    .bg-grade-6th.active { background-color: #f97316; border-color: #ea580c; } /* Orange-500, darker border */
-
-    .bg-grade-7th { background-color: #0d9488; border-color: #0f766e; } /* Teal-600, darker border */
-    .bg-grade-7th:hover { background-color: #0f766e; } /* Teal-700 */
-    .bg-grade-7th.active { background-color: #f97316; border-color: #ea580c; } /* Orange-500, darker border */
-
-    .bg-grade-8th { background-color: #9333ea; border-color: #7e22ce; } /* Purple-600, darker border */
-    .bg-grade-8th:hover { background-color: #7e22ce; } /* Purple-700 */
-    .bg-grade-8th.active { background-color: #f97316; border-color: #ea580c; } /* Orange-500, darker border */
-
-    .bg-grade-exploratories { background-color: #e11d48; border-color: #be123c; } /* Rose-600, darker border */
-    .bg-grade-exploratories:hover { background-color: #be123c; } /* Rose-700 */
-    .bg-grade-exploratories.active { background-color: #f97316; border-color: #ea580c; } /* Orange-500, darker border */
-
-    /* General Button Styling */
-    .action-button {
-      padding: 0.5rem 1rem; /* Adjusted padding */
-      font-size: 0.9rem; /* Adjusted font size */
-      border-radius: 0.5rem; /* Adjusted border-radius */
-      box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1); /* Softer shadow */
+    .grade-button {
+      position: relative;
+      z-index: 10;
+      padding: 0.75rem 1.5rem;
+      border-radius: 9999px;
+      border: none;
+      background-color: transparent;
+      color: #4b5563;
       font-weight: 600;
-      transition: background-color 0.2s ease-in-out, opacity 0.2s ease-in-out, border-color 0.2s ease-in-out;
-      border: 1px solid; /* Add a border */
-      color: white; /* Ensure text color is white */
-      white-space: nowrap; /* Prevent text wrapping inside buttons */
       cursor: pointer;
-    }
-    .action-button:hover:not(:disabled) { /* Add hover effect */
-      filter: brightness(90%); /* Slightly darken on hover */
-    }
-    .action-button:disabled {
-      opacity: 0.6; /* More visible disabled state */
-      cursor: not-allowed;
+      transition: color 0.3s ease;
+      white-space: nowrap;
     }
 
-    /* Floating Action Buttons (FABs) */
+    .grade-button.active {
+      color: #ffffff;
+    }
+    
+    .grade-button:not(.active):hover {
+        color: #1f2937;
+    }
+
+    #active-grade-pill {
+      position: absolute;
+      top: 0.25rem;
+      bottom: 0.25rem;
+      border-radius: 9999px;
+      transition: left 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), width 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+      z-index: 5;
+    }
+    
+    /* --- Grade Specific Colors --- */
+    .bg-grade-6th { background-color: #6366f1; } /* Indigo-500 */
+    .bg-grade-7th { background-color: #14b8a6; } /* Teal-500 */
+    .bg-grade-8th { background-color: #a855f7; } /* Purple-500 */
+    .bg-grade-exploratories { background-color: #f43f5e; } /* Rose-500 */
+
+    /* --- Agenda Row Styling --- */
+    .agenda-row {
+        background-color: #ffffff;
+        border-radius: 0.75rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        transition: all 0.2s ease-in-out;
+        border: 1px solid #e5e7eb;
+        cursor: pointer;
+    }
+    .agenda-row:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.07);
+        border-color: #d1d5db;
+    }
+    
+    .row-content-wrapper {
+        display: grid;
+        grid-template-columns: 1.5fr 2fr 2fr 2fr 2fr 0.5fr;
+        gap: 1.5rem;
+        padding: 1rem 1.5rem;
+        align-items: start; /* Align to top for the new layout */
+    }
+
+    .cell-item {
+      min-width: 0; /* Prevents flexbox overflow */
+    }
+
+    .cell-label {
+      font-size: 0.75rem; /* 12px */
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #9ca3af; /* gray-400 */
+      margin-bottom: 0.125rem;
+    }
+
+    .cell-content {
+      font-weight: 600;
+      color: #1f2937; /* gray-800 */
+      /* Default state: single line, truncated */
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    /* Expanded state styling */
+    .agenda-row.expanded .cell-content {
+        white-space: pre-wrap; /* Allow wrapping and respect newlines */
+        overflow: visible;
+        text-overflow: clip;
+        word-break: break-word;
+    }
+    
+    .toggle-icon {
+        transition: transform 0.3s ease;
+        padding-top: 0.25rem; /* Align with content */
+    }
+    
+    .agenda-row.expanded .toggle-icon {
+        transform: rotate(180deg);
+    }
+    
+    .expand-cell {
+        text-align: right;
+    }
+
+    /* --- Workload Stats Chart --- */
+    .stats-card {
+        background-color: #fff;
+        border-radius: 1rem;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+    }
+    .chart-container {
+        display: flex;
+        justify-content: space-around;
+        align-items: flex-end;
+        height: 150px;
+        border-bottom: 2px solid #e5e7eb;
+        padding-bottom: 0.5rem;
+    }
+    .chart-bar-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 15%;
+    }
+    .chart-bar {
+        width: 100%;
+        background-color: #a5b4fc; /* Indigo-300 */
+        border-radius: 0.25rem 0.25rem 0 0;
+        transition: height 0.5s ease-out;
+        position: relative;
+    }
+    .bar-value {
+        position: absolute;
+        top: -1.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        font-weight: 600;
+        color: #374151;
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .chart-bar:hover .bar-value {
+        opacity: 1;
+    }
+    .day-label {
+        margin-top: 0.5rem;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #6b7280;
+    }
+    
+    /* --- Floating Action Buttons (FABs) --- */
     .fab-container {
       position: fixed;
       bottom: 1.5rem;
       right: 1.5rem;
       display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-      z-index: 1000;
-    }
-
-    .fab-selection-container {
-      position: fixed;
-      bottom: 1.5rem;
-      right: 1.5rem;
-      display: none; /* Hidden by default */
-      flex-direction: column;
-      gap: 0.75rem;
+      gap: 1rem;
       z-index: 1000;
     }
 
     .fab-button {
-      width: 3.5rem; /* Size for circular button */
-      height: 3.5rem; /* Size for circular button */
-      border-radius: 50%; /* Make it circular */
+      width: 3.5rem;
+      height: 3.5rem;
+      border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 1.5rem; /* Icon size */
+      font-size: 1.25rem;
       color: white;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* Stronger shadow for floating effect */
-      transition: background-color 0.2s ease-in-out, transform 0.2s ease-in-out;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      transition: all 0.3s ease;
       cursor: pointer;
-      border: none; /* No border for FABs */
-    }
-
-    .fab-button:hover {
-      transform: translateY(-3px); /* Slight lift on hover */
-    }
-
-    .fab-button:active {
-      transform: translateY(0); /* Press down effect */
-    }
-
-    
-
-
-    /* Table specific styling */
-    .agenda-table {
-      width: 100%;
-      border-collapse: separate; 
-      border-spacing: 0; 
-      table-layout: auto; 
-      border: 1px solid #e0e7ff; 
-      border-radius: 0.75rem; 
-      overflow: hidden; 
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); 
-    }
-    .agenda-table th, .agenda-table td {
-      padding: 1.25rem 1.5rem; /* Increased padding for a more spacious look */
-      text-align: left;
-      border-bottom: 1px solid #e0e7ff; 
-      border-right: 1px solid #e0e7ff; 
-      vertical-align: top; 
-      font-size: 1rem; /* Slightly larger font size for readability */
-      line-height: 1.6; 
-      color: #374151; 
-    }
-    .agenda-table th {
-      background-color: #eef2ff; 
-      font-weight: 600; 
-      color: #1c3c7a; 
-      white-space: nowrap; 
-      text-transform: uppercase; 
-      font-size: 0.85rem; /* Slightly larger header font size */
-      letter-spacing: 0.05em; 
-    }
-    /* Remove right border for the last column's cells (excluding checkbox col) */
-    .agenda-table th:not(.checkbox-col):last-child,
-    .agenda-table td:not(.checkbox-col):last-child {
-      border-right: none;
-    }
-    /* Remove bottom border for the last row's cells */
-    .agenda-table tbody tr:last-child td {
-      border-bottom: none;
-    }
-
-    /* Alternating row colors for better distinction */
-    .agenda-table tbody tr:nth-child(odd) {
-      background-color: #ffffff; 
-    }
-    .agenda-table tbody tr:nth-child(even) {
-      background-color: #f8fafc; 
-    }
-    .agenda-table tbody tr:hover {
-      background-color: #e0f2fe; 
-      transition: background-color 0.2s ease-in-out; 
-    }
-    
-    /* Responsive table for smaller screens */
-    @media (max-width: 767px) { 
-      .table-responsive {
-        overflow-x: auto; 
-        -webkit-overflow-scrolling: touch; 
-      }
-      .agenda-table {
-        min-width: 900px; 
-      }
-      .agenda-table th, .agenda-table td {
-        padding: 0.8rem 0.8rem; /* Adjusted padding for smaller screens */
-        font-size: 0.9rem; /* Adjusted font size for smaller screens */
-      }
-    }
-
-    /* Print-specific styles */
-    @media print {
-      body {
-        background-color: #fff;
-        margin: 0;
-        padding: 0;
-        display: block; 
-      }
-      header, nav, .print-buttons, #message-area, #loading-spinner, .checkbox-col, .toggle-col {
-        display: none !important; 
-      }
-      .container {
-        width: 100% !important;
-        max-width: none !important;
-        padding: 0.5in; 
-      }
-      .table-responsive {
-        overflow-x: visible; 
-      }
-      .agenda-table {
-        min-width: auto; 
-        table-layout: auto; 
-        border: 1px solid #ccc; 
-        box-shadow: none; 
-        border-radius: 0; 
-      }
-      .agenda-table th, .agenda-table td {
-        border: 1px solid #ddd; 
-        padding: 0.4rem 0.6rem; /* Adjusted padding for print */
-        font-size: 0.75rem; /* Adjusted font size for print */
-        color: black !important; 
-        white-space: normal; 
-      }
-      .agenda-table th {
-        background-color: #e9e9e9; 
-        text-transform: none; 
-        letter-spacing: normal;
-      }
-      .agenda-table tbody tr:nth-child(odd) {
-        background-color: #ffffff; 
-      }
-      .agenda-table tbody tr:nth-child(even) {
-        background-color: #f0f0f0; 
-      }
-      /* Ensure content is visible in print */
-      .collapsible-content {
-        display: block !important;
-      }
-    }
-
-    /* Collapsible row styles */
-    .collapsible-content {
-      display: block; /* Default to visible */
-      overflow: hidden;
-      transition: max-height 0.3s ease-out, padding 0.3s ease-out; /* Smooth transition */
-      max-height: 500px; /* Max height when expanded */
-    }
-    .collapsible-content.collapsed {
-      max-height: 0; /* Hide content */
-      padding-top: 0 !important; 
-      padding-bottom: 0 !important;
-    }
-    .toggle-button {
-      background: none;
       border: none;
-      cursor: pointer;
-      padding: 0;
-      margin-left: 0.5rem;
-      color: inherit; /* Inherit color from parent */
-      font-size: inherit; /* Inherit font size from parent */
-      position: absolute;
-      right: 0.5rem;
-      top: 50%;
-      transform: translateY(-50%);
     }
-    .toggle-button:focus {
-      outline: 2px solid #2563eb; /* Blue-700 for focus indicator */
-      outline-offset: 2px;
+    .fab-button:hover {
+      transform: translateY(-3px) scale(1.05);
+      box-shadow: 0 6px 16px rgba(0,0,0,0.25);
     }
-    .toggle-icon.rotated {
-      transform: rotate(90deg); /* Icon points right when collapsed, down when expanded */
+    
+    .print-fab { background-color: #3b82f6; } /* Blue-500 */
+    .pdf-fab { background-color: #8b5cf6; } /* Violet-500 */
+    
+    /* --- Skeleton Loader --- */
+    .skeleton-row {
+        background-color: #ffffff;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .skeleton {
+        background-color: #e5e7eb;
+        border-radius: 0.5rem;
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse {
+        50% { opacity: .5; }
     }
 
-    /* Checkbox column specific styles */
-    .checkbox-col {
-      width: 1%; 
-      text-align: center;
-      padding-left: 0.5rem;
-      padding-right: 0.5rem;
+    /* --- Print Styles --- */
+    @media print {
+      body { background-color: #fff; }
+      .no-print { display: none !important; }
+      #main-content { padding: 0.5in; }
+      .agenda-row {
+        box-shadow: none;
+        border: 1px solid #ccc;
+        page-break-inside: avoid;
+        transform: none !important;
+      }
+      .agenda-row.expanded .cell-content, .cell-content {
+          white-space: pre-wrap !important;
+          overflow: visible !important;
+      }
+      .toggle-icon { display: none; }
     }
-    .checkbox-col input[type="checkbox"] {
-      transform: scale(1.2); 
-      cursor: pointer;
-    }
-    .checkbox-col.hidden-col {
-      display: none;
-    }
-    .pdf-selection-buttons {
-      display: none; 
+    
+    /* Responsive grid for smaller screens */
+    @media (max-width: 1200px) {
+        .row-content-wrapper {
+            grid-template-columns: 1fr;
+            padding-bottom: 0.5rem;
+        }
+        .row-content-wrapper > div:not(:first-child) {
+            padding-top: 0.5rem;
+        }
+        .teacher-info {
+            padding-bottom: 0.5rem !important;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 0.5rem;
+        }
+        .expand-cell {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+        }
     }
   </style>
 </head>
-<body>
-  <div class="container mx-auto p-4 md:p-8 flex-grow">
+<body class="antialiased">
+
+  <div class="container mx-auto px-4 py-8">
     <!-- Header -->
-    <header class="text-center mb-6">
-      <h1 class="text-4xl font-extrabold text-gray-900 mb-2">Daily Agendas</h1>
-      <p id="current-date" class="text-lg text-gray-600"></p>
+    <header class="text-center mb-8 no-print">
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 tracking-tight mb-2">Daily Agendas</h1>
+      <p id="current-date" class="text-lg text-gray-500"></p>
     </header>
 
     <!-- Grade Level Navigation -->
-    <nav class="mb-6 flex flex-wrap justify-center gap-3"> 
-      <button class="grade-button action-button bg-grade-6th active" data-grade="6th Grade">6th Grade</button>
-      <button class="grade-button action-button bg-grade-7th" data-grade="7th Grade">7th Grade</button>
-      <button class="grade-button action-button bg-grade-8th" data-grade="8th Grade">8th Grade</button>
-      <button class="grade-button action-button bg-grade-exploratories" data-grade="Exploratories">Exploratories</button>
+    <nav class="mb-8 flex justify-center no-print">
+      <div id="grade-nav" class="grade-nav-container">
+        <div id="active-grade-pill"></div>
+        <button class="grade-button" data-grade="6th Grade">6th Grade</button>
+        <button class="grade-button" data-grade="7th Grade">7th Grade</button>
+        <button class="grade-button" data-grade="8th Grade">8th Grade</button>
+        <button class="grade-button" data-grade="Exploratories">Exploratories</button>
+      </div>
     </nav>
-
     
+    <!-- Message Area -->
+    <div id="message-area" class="text-center text-lg text-gray-700 mb-6 hidden" role="status" aria-live="polite"></div>
 
-    <!-- Loading/Error Message -->
-    <div id="message-area" class="text-center text-base text-gray-700 mb-4 hidden" role="status" aria-live="polite"></div> 
-    <div id="loading-spinner" class="text-center py-8" role="alert" aria-live="assertive">
-      <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mx-auto"></div>
-      <p class="mt-4 text-blue-700">Loading agendas...</p>
-    </div>
+    <!-- Main Content Area -->
+    <main id="main-content">
+        <!-- Workload Statistics -->
+        <div id="stats-container" class="mb-8 no-print"></div>
 
-    <!-- Agenda Display Area -->
-    <div id="agenda-container" class="table-responsive">
-      <!-- Agenda table will be rendered here -->
-    </div>
-  </main>
+        <!-- Agenda Display Area -->
+        <div id="agenda-container" class="flex flex-col gap-3">
+          <!-- Agenda rows will be rendered here -->
+        </div>
+        <div id="loading-container" class="flex flex-col gap-3">
+          <!-- Skeleton loaders will be shown here -->
+        </div>
+    </main>
+  </div>
 
-  <!-- Floating Action Buttons Container -->
-  <div class="fab-container">
-    <button id="print-button" class="fab-button print-fab" aria-label="Print Current View">
+  <!-- Floating Action Buttons -->
+  <div id="fab-container" class="fab-container no-print">
+    <button id="print-button" class="fab-button print-fab" aria-label="Print Current View" title="Print View">
       <i class="fas fa-print"></i>
     </button>
-    <button id="pdf-button" class="fab-button pdf-fab" aria-label="Save as PDF">
+    <button id="pdf-button" class="fab-button pdf-fab" aria-label="Save as PDF" title="Save as PDF" disabled>
       <i class="fas fa-file-pdf"></i>
     </button>
   </div>
-
-  <!-- PDF Selection Floating Buttons (hidden by default) -->
-  <div id="pdf-selection-controls" class="fab-selection-container">
-    <button id="confirm-pdf-button" class="fab-button confirm-fab" aria-label="Confirm Selected for PDF">
-      <i class="fas fa-check"></i>
-    </button>
-    <button id="cancel-pdf-button" class="fab-button cancel-fab" aria-label="Cancel Selection">
-      <i class="fas fa-times"></i>
-    </button>
-  </div>
-
+  
   <script>
-    // Global variable to store all fetched agenda data
+    // --- Global State & DOM Elements ---
     let allAgendaData = [];
-    let currentGradeFilter = '6th Grade'; // Default filter
-    let pdfSelectionMode = false; // Track if PDF selection mode is active
+    let currentGradeFilter = '6th Grade';
 
-    // DOM elements
     const agendaContainer = document.getElementById('agenda-container');
-    const loadingSpinner = document.getElementById('loading-spinner');
+    const loadingContainer = document.getElementById('loading-container');
     const messageArea = document.getElementById('message-area');
     const currentDateDisplay = document.getElementById('current-date');
+    const gradeNav = document.getElementById('grade-nav');
     const gradeButtons = document.querySelectorAll('.grade-button');
+    const activeGradePill = document.getElementById('active-grade-pill');
+    const fabContainer = document.getElementById('fab-container');
     const printButton = document.getElementById('print-button');
     const pdfButton = document.getElementById('pdf-button');
-    const pdfSelectionControls = document.getElementById('pdf-selection-controls');
-    const confirmPdfButton = document.getElementById('confirm-pdf-button');
-    const cancelPdfButton = document.getElementById('cancel-pdf-button');
+    const statsContainer = document.getElementById('stats-container');
 
-    // Function to display messages (loading, error, no data)
+    // --- UI Update Functions ---
+
     function showMessage(msg, type = 'info') {
       messageArea.textContent = msg;
-      messageArea.classList.remove('hidden', 'text-red-600', 'text-green-600', 'text-gray-700');
-      if (type === 'error') {
-        messageArea.classList.add('text-red-600');
-      } else if (type === 'success') {
-        messageArea.classList.add('text-green-600');
-      } else {
-        messageArea.classList.add('text-gray-700');
-      }
-      messageArea.classList.remove('hidden');
+      messageArea.className = 'text-center text-lg mb-6'; // Reset classes
+      if (type === 'error') messageArea.classList.add('text-red-600');
+      else if (type === 'success') messageArea.classList.add('text-green-600');
+      else messageArea.classList.add('text-gray-700');
     }
 
-    // Function to hide messages
     function hideMessage() {
       messageArea.classList.add('hidden');
+      messageArea.textContent = '';
+    }
+    
+    function showLoadingSkeletons(count = 5) {
+        agendaContainer.innerHTML = '';
+        loadingContainer.innerHTML = '';
+        statsContainer.innerHTML = '';
+        hideMessage();
+        for (let i = 0; i < count; i++) {
+            const skeleton = `
+                <div class="skeleton-row">
+                    <div class="grid grid-cols-6 gap-4 items-center p-4">
+                        <div class="col-span-1">
+                            <div class="skeleton h-5 w-3/4"></div>
+                            <div class="skeleton h-4 w-1/2 mt-2"></div>
+                        </div>
+                        <div class="skeleton h-8 w-full col-span-1"></div>
+                        <div class="skeleton h-8 w-full col-span-1"></div>
+                        <div class="skeleton h-8 w-full col-span-1"></div>
+                        <div class="skeleton h-8 w-full col-span-1"></div>
+                        <div class="skeleton h-8 w-full col-span-1"></div>
+                    </div>
+                </div>
+            `;
+            loadingContainer.innerHTML += skeleton;
+        }
     }
 
-    // Function to show/hide loading spinner
-    function showLoadingSpinner() {
-      loadingSpinner.classList.remove('hidden');
-      agendaContainer.innerHTML = ''; // Clear previous content
-      hideMessage();
+    function hideLoadingSkeletons() {
+        loadingContainer.innerHTML = '';
     }
 
-    function hideLoadingSpinner() {
-      loadingSpinner.classList.add('hidden');
+    function updateActiveGradePill(activeButton) {
+        const grade = activeButton.dataset.grade;
+        const pillColorClass = {
+            '6th Grade': 'bg-grade-6th',
+            '7th Grade': 'bg-grade-7th',
+            '8th Grade': 'bg-grade-8th',
+            'Exploratories': 'bg-grade-exploratories'
+        }[grade];
+
+        activeGradePill.className = 'absolute'; // Reset classes
+        activeGradePill.classList.add(pillColorClass);
+        
+        setTimeout(() => {
+            activeGradePill.style.left = `${activeButton.offsetLeft}px`;
+            activeGradePill.style.width = `${activeButton.offsetWidth}px`;
+        }, 0);
     }
 
-    // Helper function to convert newlines to <br> tags
-    function formatTextWithLineBreaks(text) {
-      return text ? text.replace(/\n/g, '<br>') : 'N/A';
+    // --- Data Rendering ---
+
+    function createAgendaRow(agenda, index) {
+        const row = document.createElement('div');
+        row.className = 'agenda-row';
+        row.id = `agenda-row-${index}`;
+
+        // Helper to create the new cell format
+        const createCell = (label, content) => {
+            const safeContent = content || 'N/A';
+            return `
+                <div class="cell-item">
+                    <p class="cell-label">${label}</p>
+                    <p class="cell-content">${safeContent.replace(/\n/g, ' ')}</p>
+                </div>
+            `;
+        };
+
+        row.innerHTML = `
+            <div class="row-content-wrapper">
+                <div class="cell-item teacher-info">
+                    <p class="cell-content" style="font-weight: 700;">${agenda.ClassName}</p>
+                    <p class="cell-label" style="text-transform: none; font-weight: 500;">${agenda.TeacherLastName}</p>
+                </div>
+                ${createCell('Turn In', agenda.TopBoxTextTurnin)}
+                ${createCell('Activities', agenda.MiddleBoxTextDailyActivities)}
+                ${createCell('Practice', agenda.BottomBoxTextPracticeWork)}
+                ${createCell('Upcoming', agenda.UpcomingText)}
+                <div class="expand-cell text-right text-gray-400">
+                    <i class="fas fa-chevron-down toggle-icon"></i>
+                </div>
+            </div>
+        `;
+        
+        row.addEventListener('click', () => {
+            row.classList.toggle('expanded');
+        });
+
+        return row;
+    }
+    
+    function renderWorkloadStats(gradeFilter) {
+        const filteredData = allAgendaData.filter(item => item.GradeLevel === gradeFilter);
+        const workload = { 'Monday': 0, 'Tuesday': 0, 'Wednesday': 0, 'Thursday': 0, 'Friday': 0 };
+        
+        filteredData.forEach(item => {
+            if (item.DayofWeek && workload.hasOwnProperty(item.DayofWeek)) {
+                if (item.TopBoxTextTurnin && item.TopBoxTextTurnin.toLowerCase() !== 'n/a' && item.TopBoxTextTurnin.trim() !== '') {
+                    workload[item.DayofWeek]++;
+                }
+            }
+        });
+        
+        const maxWorkload = Math.max(...Object.values(workload), 1);
+        const pillColorClass = {
+            '6th Grade': 'bg-grade-6th',
+            '7th Grade': 'bg-grade-7th',
+            '8th Grade': 'bg-grade-8th',
+            'Exploratories': 'bg-grade-exploratories'
+        }[gradeFilter];
+
+        let chartHTML = `
+            <div class="stats-card">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">Weekly Workload: Items Due</h2>
+                <div class="chart-container">
+        `;
+
+        for (const day in workload) {
+            const count = workload[day];
+            const barHeight = (count / maxWorkload) * 100;
+            chartHTML += `
+                <div class="chart-bar-wrapper">
+                    <div class="chart-bar ${pillColorClass}" style="height: ${barHeight}%;" title="${count} items due on ${day}">
+                        <span class="bar-value">${count}</span>
+                    </div>
+                    <span class="day-label">${day.substring(0,3)}</span>
+                </div>
+            `;
+        }
+
+        chartHTML += `</div></div>`;
+        statsContainer.innerHTML = chartHTML;
     }
 
-    // Function to toggle row content visibility
-    function toggleRowDetails(event) {
-      const button = event.currentTarget; // The clicked button
-      const row = button.closest('tr'); // Find the parent row
-      const toggleIcon = button.querySelector('.toggle-icon');
-      const collapsibleCells = row.querySelectorAll('.collapsible-content');
-
-      const isExpanded = button.getAttribute('aria-expanded') === 'true';
-      button.setAttribute('aria-expanded', String(!isExpanded));
-
-      collapsibleCells.forEach(cellContent => {
-        cellContent.classList.toggle('collapsed', isExpanded);
-      });
-      // Toggle icon rotation: points right when collapsed, down when expanded
-      toggleIcon.classList.toggle('rotated', isExpanded); 
-    }
-
-    // Function to render agendas based on filter
-    function renderAgendas(gradeFilter) {
-      agendaContainer.innerHTML = ''; // Clear existing content
+    function renderAllContent(gradeFilter) {
+      agendaContainer.innerHTML = '';
       hideMessage();
 
       const filteredData = allAgendaData.filter(item => item.GradeLevel === gradeFilter);
+      
+      renderWorkloadStats(gradeFilter);
 
       if (filteredData.length === 0) {
         showMessage(`No agendas available for ${gradeFilter} today.`, 'info');
-        printButton.classList.add('hidden');
-        pdfButton.classList.add('hidden');
+        fabContainer.classList.add('hidden');
         return;
       }
 
-      printButton.classList.remove('hidden');
-      pdfButton.classList.remove('hidden');
-
-      // Create table structure
-      const table = document.createElement('table');
-      table.className = 'agenda-table bg-white'; 
-
-      const thead = document.createElement('thead');
-      const tbody = document.createElement('tbody');
-
-      // Define headers with their corresponding data keys
-      const headersConfig = [
-        { text: 'Teacher Last Name', key: 'TeacherLastName', collapsible: false },
-        { text: 'Class Name', key: 'ClassName', collapsible: false },
-        { text: 'Day of Week', key: 'DayofWeek', collapsible: false },
-        { text: 'Turn In', key: 'TopBoxTextTurnin', collapsible: true },
-        { text: 'Daily Activities', key: 'MiddleBoxTextDailyActivities', collapsible: true },
-        { text: 'Practice Work', key: 'BottomBoxTextPracticeWork', collapsible: true },
-        { text: 'Upcoming', key: 'UpcomingText', collapsible: true }
-      ];
-
-      // Create table headers
-      const headerRow = document.createElement('tr');
-      // Add "Select All" checkbox column for PDF selection
-      const selectAllTh = document.createElement('th');
-      selectAllTh.className = 'checkbox-col hidden-col'; 
-      const selectAllCheckbox = document.createElement('input');
-      selectAllCheckbox.type = 'checkbox';
-      selectAllCheckbox.id = 'select-all-checkbox';
-      selectAllCheckbox.addEventListener('change', toggleAllCheckboxes);
-      selectAllTh.appendChild(selectAllCheckbox);
-      headerRow.appendChild(selectAllTh);
-
-      headersConfig.forEach(header => {
-        const th = document.createElement('th');
-        th.textContent = header.text;
-        headerRow.appendChild(th);
-      });
-      thead.appendChild(headerRow);
-      table.appendChild(thead);
-
-      // Populate table body with data
+      fabContainer.classList.remove('hidden');
       filteredData.forEach((agenda, index) => {
-        const tr = document.createElement('tr');
-        tr.dataset.index = index; 
-
-        // Array to store IDs of collapsible content for this row
-        const collapsibleContentIds = [];
-
-        // Add checkbox column for PDF selection
-        const checkboxTd = document.createElement('td');
-        checkboxTd.className = 'checkbox-col hidden-col'; 
-        const rowCheckbox = document.createElement('input');
-        rowCheckbox.type = 'checkbox';
-        rowCheckbox.className = 'row-checkbox';
-        rowCheckbox.dataset.index = index; 
-        checkboxTd.appendChild(rowCheckbox);
-        tr.appendChild(checkboxTd);
-
-        headersConfig.forEach(header => {
-          const td = document.createElement('td');
-          const contentDiv = document.createElement('div');
-          contentDiv.innerHTML = formatTextWithLineBreaks(agenda[header.key]);
-          
-          // Default to open (NO 'collapsed' class initially)
-          if (header.collapsible) {
-            contentDiv.classList.add('collapsible-content'); 
-            const contentId = `agenda-details-${index}-${header.key}`;
-            contentDiv.id = contentId;
-            collapsibleContentIds.push(contentId);
-          }
-          td.appendChild(contentDiv);
-          tr.appendChild(td);
-        });
-
-        // Add toggle button to the Teacher Last Name cell
-        const teacherNameCell = tr.querySelector('td:nth-child(2)'); 
-        if (teacherNameCell) {
-          const toggleButton = document.createElement('button');
-          toggleButton.className = 'toggle-button';
-          toggleButton.setAttribute('aria-expanded', 'true'); // Default to expanded
-          toggleButton.setAttribute('aria-controls', collapsibleContentIds.join(' ')); // Set aria-controls with all IDs
-          toggleButton.innerHTML = '<i class="fas fa-chevron-down toggle-icon"></i>'; // Default to down arrow (expanded)
-          toggleButton.addEventListener('click', toggleRowDetails);
-          teacherNameCell.appendChild(toggleButton); 
-          teacherNameCell.style.position = 'relative'; 
-          teacherNameCell.style.paddingRight = '2rem'; 
-        }
-        
-        tbody.appendChild(tr);
-      });
-      table.appendChild(tbody);
-      agendaContainer.appendChild(table);
-    }
-
-    // Function to toggle all checkboxes
-    function toggleAllCheckboxes(event) {
-      const isChecked = event.target.checked;
-      document.querySelectorAll('.row-checkbox').forEach(checkbox => {
-        checkbox.checked = isChecked;
+        const row = createAgendaRow(agenda, index);
+        agendaContainer.appendChild(row);
       });
     }
+    
+    // --- Data Fetching ---
 
-    // Function to toggle PDF selection mode
-    function togglePdfSelectionMode(enable) {
-      pdfSelectionMode = enable;
-
-      const checkboxCols = document.querySelectorAll('.checkbox-col');
-      const allCheckboxes = document.querySelectorAll('.row-checkbox, #select-all-checkbox');
-      const regularButtons = [printButton, pdfButton];
-      const pdfControlButtons = [confirmPdfButton, cancelPdfButton];
-
-      if (enable) {
-        checkboxCols.forEach(col => col.classList.remove('hidden-col'));
-        pdfSelectionControls.style.display = 'flex';
-        regularButtons.forEach(btn => btn.disabled = true);
-        gradeButtons.forEach(btn => btn.disabled = true); 
-        // Ensure all rows are expanded in PDF selection mode for better visibility
-        document.querySelectorAll('.collapsible-content').forEach(content => content.classList.remove('collapsed'));
-        document.querySelectorAll('.toggle-icon').forEach(icon => icon.classList.remove('rotated')); // Ensure icon is in expanded state
-        document.querySelectorAll('.toggle-button').forEach(button => button.setAttribute('aria-expanded', 'true'));
-        confirmPdfButton.focus(); // Move focus to the confirm button
-      } else {
-        checkboxCols.forEach(col => col.classList.add('hidden-col'));
-        pdfSelectionControls.style.display = 'none';
-        regularButtons.forEach(btn => btn.disabled = false);
-        gradeButtons.forEach(btn => btn.disabled = false); 
-        allCheckboxes.forEach(cb => cb.checked = false); 
-        // Re-set all rows to expanded state (default)
-        document.querySelectorAll('.collapsible-content').forEach(content => content.classList.remove('collapsed'));
-        document.querySelectorAll('.toggle-icon').forEach(icon => icon.classList.remove('rotated')); // Ensure icon is in expanded state
-        document.querySelectorAll('.toggle-button').forEach(button => button.setAttribute('aria-expanded', 'true'));
-        pdfButton.focus(); // Return focus to the PDF button 
-      }
-    }
-
-    // Function to fetch data from Google Apps Script
     async function fetchData() {
-      showLoadingSpinner();
+      showLoadingSkeletons();
       try {
-        // This error typically occurs if the web app is opened directly from the Apps Script editor
-        // or a local file, instead of its deployed URL.
-        if (typeof google === 'undefined' || typeof google.script === 'undefined' || typeof google.script.run === 'undefined') {
-          throw new Error("The 'google.script.run' API is not available. Please ensure the web app is deployed and accessed via its provided URL, not directly from the editor.");
+        if (typeof google === 'undefined' || !google.script || !google.script.run) {
+           throw new Error("This app must be run from its deployed Google Apps Script URL.");
         }
-        const data = await google.script.run.withSuccessHandler(onSuccess).withFailureHandler(onFailure).getAgendaData();
+        new Promise((resolve, reject) => {
+            google.script.run
+                .withSuccessHandler(resolve)
+                .withFailureHandler(reject)
+                .getAgendaData();
+        }).then(onSuccess).catch(onFailure);
       } catch (error) {
         onFailure(error);
       }
     }
 
-    // Callback for successful data fetch
     function onSuccess(data) {
-      hideLoadingSpinner();
-      allAgendaData = data; 
-      renderAgendas(currentGradeFilter);
+      hideLoadingSkeletons();
+      allAgendaData = data;
+      renderAllContent(currentGradeFilter);
     }
 
-    // Callback for failed data fetch
     function onFailure(error) {
-      hideLoadingSpinner();
-      showMessage(`Error loading agendas: ${error.message}. Please try again later.`, 'error');
-      console.error('Error fetching data:', error);
+      hideLoadingSkeletons();
+      showMessage(`Error: ${error.message || 'Could not load agendas.'}. Please refresh.`, 'error');
+      console.error('Data fetch error:', error);
       fabContainer.classList.add('hidden');
     }
 
-    // --- Print and PDF Functions ---
+    // --- Print and PDF ---
 
     function printAgendas() {
-      window.print();
+      // Ensure all rows are expanded for printing
+      document.querySelectorAll('.agenda-row:not(.expanded)').forEach(r => r.classList.add('expanded'));
+      setTimeout(() => window.print(), 100); // Allow time for DOM to update
     }
 
-    async function saveAsPdf() {
-      // Enter PDF selection mode
-      togglePdfSelectionMode(true);
-      showMessage('Select rows for PDF, then click "Confirm Selected for PDF".', 'info');
-    }
+    // --- Event Listeners ---
 
-    async function confirmPdfGeneration() {
-      showMessage('Generating PDF...', 'info');
-      confirmPdfButton.disabled = true;
-      cancelPdfButton.disabled = true;
-
-      try {
-        if (typeof window.jspdf === 'undefined' || typeof window.html2canvas === 'undefined') {
-          throw new Error("PDF libraries (jsPDF, html2canvas) not loaded.");
-        }
-        const { jsPDF } = window.jspdf;
-
-        const selectedRows = Array.from(document.querySelectorAll('.row-checkbox:checked'))
-                                  .map(cb => parseInt(cb.dataset.index))
-                                  .map(index => allAgendaData.filter(item => item.GradeLevel === currentGradeFilter)[index]);
-
-        if (selectedRows.length === 0) {
-          showMessage('No rows selected for PDF. Please select at least one.', 'error');
-          return; 
-        }
-
-        // Create a temporary, hidden div for PDF content
-        const pdfContentDiv = document.createElement('div');
-        pdfContentDiv.style.cssText = 'position: absolute; left: -9999px; top: -9999px; width: 8.5in; padding: 0.5in; background-color: white;';
-        document.body.appendChild(pdfContentDiv);
-
-        // Add a professional header to the PDF content
-        pdfContentDiv.innerHTML = `
-          <h1 style="font-family: 'Inter', sans-serif; font-size: 24pt; font-weight: bold; text-align: center; color: #1c3c7a; margin-bottom: 20pt;">Daily Agendas - ${currentGradeFilter}</h1>
-          <p style="font-family: 'Inter', sans-serif; font-size: 12pt; text-align: center; color: #374151; margin-bottom: 30pt;">Agendas for ${currentDateDisplay.textContent.replace('Agendas for ', '')}</p>
-        `;
-
-        // Create a clean table for the PDF content
-        const pdfTable = document.createElement('table');
-        pdfTable.style.cssText = `
-          width: 100%; 
-          border-collapse: collapse; 
-          font-family: 'Inter', sans-serif; 
-          font-size: 10pt;
-          border: 1px solid #ccc;
-        `;
-        const pdfThead = document.createElement('thead');
-        const pdfTbody = document.createElement('tbody');
-
-        const pdfHeaders = [
-          'Teacher', 'Class', 'Day', 'Turn In', 'Daily Activities', 'Practice Work', 'Upcoming'
-        ];
-        const pdfHeaderRow = document.createElement('tr');
-        pdfHeaders.forEach(h => {
-          const th = document.createElement('th');
-          th.textContent = h;
-          th.style.cssText = `
-            padding: 8pt 10pt; 
-            text-align: left; 
-            background-color: #e9e9e9; 
-            font-weight: bold; 
-            border: 1px solid #ddd;
-            color: black;
-          `;
-          pdfHeaderRow.appendChild(th);
-        });
-        pdfThead.appendChild(pdfHeaderRow);
-        pdfTable.appendChild(pdfThead);
-
-        selectedRows.forEach((agenda, index) => {
-          const tr = document.createElement('tr');
-          tr.style.cssText = `background-color: ${index % 2 === 0 ? '#ffffff' : '#f0f0f0'};`; // Alternating rows
-          tr.innerHTML = `
-            <td style="padding: 8pt 10pt; border: 1px solid #ddd; vertical-align: top;">${agenda.TeacherLastName || 'N/A'}</td>
-            <td style="padding: 8pt 10pt; border: 1px solid #ddd; vertical-align: top;">${agenda.ClassName || 'N/A'}</td>
-            <td style="padding: 8pt 10pt; border: 1px solid #ddd; vertical-align: top;">${agenda.DayofWeek || 'N/A'}</td>
-            <td style="padding: 8pt 10pt; border: 1px solid #ddd; vertical-align: top;">${formatTextWithLineBreaks(agenda.TopBoxTextTurnin)}</td>
-            <td style="padding: 8pt 10pt; border: 1px solid #ddd; vertical-align: top;">${formatTextWithLineBreaks(agenda.MiddleBoxTextDailyActivities)}</td>
-            <td style="padding: 8pt 10pt; border: 1px solid #ddd; vertical-align: top;">${formatTextWithLineBreaks(agenda.BottomBoxTextPracticeWork)}</td>
-            <td style="padding: 8pt 10pt; border: 1px solid #ddd; vertical-align: top;">${formatTextWithLineBreaks(agenda.UpcomingText)}</td>
-          `;
-          pdfTbody.appendChild(tr);
-        });
-        pdfTable.appendChild(pdfTbody);
-        pdfContentDiv.appendChild(pdfTable);
-
-        // Generate PDF from the temporary div
-        const canvas = await html2canvas(pdfContentDiv, {
-          scale: 2, 
-          useCORS: true,
-          logging: false 
-        });
-
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'pt', 'letter'); 
-
-        const imgWidth = 612; 
-        const pageHeight = 792; 
-        const imgHeight = canvas.height * imgWidth / canvas.width;
-        let heightLeft = imgHeight;
-        let position = 0;
-
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
-
-        while (heightLeft >= 0) {
-          position = heightLeft - imgHeight;
-          pdf.addPage();
-          pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-          heightLeft -= pageHeight;
-        }
-
-        const today = new Date();
-        const dateString = today.toLocaleDateString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
-        const filename = `DailyAgendas_Selected_${currentGradeFilter.replace(/\s/g, '')}_${dateString}.pdf`;
-
-        pdf.save(filename);
-        showMessage('PDF generated successfully!', 'success');
-
-      } catch (error) {
-        showMessage(`Error generating PDF: ${error.message}.`, 'error');
-        console.error('PDF generation error:', error);
-      } finally {
-        // Clean up temporary div
-        if (pdfContentDiv && pdfContentDiv.parentNode) {
-          pdfContentDiv.parentNode.removeChild(pdfContentDiv);
-        }
-        // Exit PDF selection mode
-        togglePdfSelectionMode(false);
-        confirmPdfButton.disabled = false;
-        cancelPdfButton.disabled = false;
-      }
-    }
-
-    // Event listeners for grade buttons
     gradeButtons.forEach(button => {
       button.addEventListener('click', () => {
-        // Exit PDF selection mode if active
-        if (pdfSelectionMode) {
-          togglePdfSelectionMode(false);
-        }
-        gradeButtons.forEach(btn => {
-          btn.classList.remove('active');
-          btn.removeAttribute('aria-current');
-        });
-        button.classList.add('active');
-        button.setAttribute('aria-current', 'page');
-        
         currentGradeFilter = button.dataset.grade;
-        renderAgendas(currentGradeFilter);
+        gradeButtons.forEach(btn => btn.classList.remove('active'));
+        button.classList.add('active');
+        updateActiveGradePill(button);
+        renderAllContent(currentGradeFilter);
       });
     });
+    
+    window.addEventListener('resize', () => {
+        const activeButton = document.querySelector('.grade-button.active');
+        if (activeButton) {
+            updateActiveGradePill(activeButton);
+        }
+    });
 
-    // Event listeners for print and PDF buttons
     printButton.addEventListener('click', printAgendas);
-    pdfButton.addEventListener('click', saveAsPdf);
-    confirmPdfButton.addEventListener('click', confirmPdfGeneration);
-    cancelPdfButton.addEventListener('click', () => togglePdfSelectionMode(false));
+    // PDF button is disabled as selection is more complex in this view.
+    // pdfButton.addEventListener('click', generatePdf);
 
-
-    // Initialize the app when the page loads
+    // --- Initialization ---
     document.addEventListener('DOMContentLoaded', () => {
       const today = new Date();
       const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-      currentDateDisplay.textContent = `Agendas for ${today.toLocaleDateString('en-US', options)}`;
+      currentDateDisplay.textContent = today.toLocaleDateString('en-US', options);
 
-      document.querySelector(`.grade-button[data-grade="${currentGradeFilter}"]`).classList.add('active');
+      const initialButton = document.querySelector(`.grade-button[data-grade="${currentGradeFilter}"]`);
+      initialButton.classList.add('active');
+      updateActiveGradePill(initialButton);
 
-      fetchData();
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+          console.warn("Running in local mode. Using mock data.");
+          const mockData = [
+                // 6th Grade
+                {GradeLevel: "6th Grade", TeacherLastName: "Johnson", ClassName: "Math 6", DayofWeek: "Monday", TopBoxTextTurnin: "Homework 3.1", MiddleBoxTextDailyActivities: "Lesson on fractions\nGroup work practice", BottomBoxTextPracticeWork: "Worksheet 3.2", UpcomingText: "Quiz on Friday"},
+                {GradeLevel: "6th Grade", TeacherLastName: "Williams", ClassName: "Science 6", DayofWeek: "Wednesday", TopBoxTextTurnin: "Lab Report Draft", MiddleBoxTextDailyActivities: "Cell mitosis lecture. This is a longer description to demonstrate how the text will wrap or be truncated in the summary view before the user expands the row to see all of the details.", BottomBoxTextPracticeWork: "Read Chapter 4", UpcomingText: "Test next week"},
+                {GradeLevel: "6th Grade", TeacherLastName: "Miller", ClassName: "English 6", DayofWeek: "Friday", TopBoxTextTurnin: "Book Report", MiddleBoxTextDailyActivities: "Peer review session", BottomBoxTextPracticeWork: "N/A", UpcomingText: "New novel next week"},
+                // 7th Grade
+                {GradeLevel: "7th Grade", TeacherLastName: "Davis", ClassName: "History 7", DayofWeek: "Tuesday", TopBoxTextTurnin: "Map of Colonies", MiddleBoxTextDailyActivities: "American Revolution discussion", BottomBoxTextPracticeWork: "Primary source analysis", UpcomingText: "Essay due Thursday"},
+                {GradeLevel: "7th Grade", TeacherLastName: "Brown", ClassName: "Pre-Algebra", DayofWeek: "Thursday", TopBoxTextTurnin: "Worksheet 7B", MiddleBoxTextDailyActivities: "Review for test", BottomBoxTextPracticeWork: "Practice test", UpcomingText: "Test on Friday"},
+                {GradeLevel: "7th Grade", TeacherLastName: "Wilson", ClassName: "Life Science", DayofWeek: "Friday", TopBoxTextTurnin: "Diorama of Biome", MiddleBoxTextDailyActivities: "Presentations", BottomBoxTextPracticeWork: "N/A", UpcomingText: "N/A"},
+                {GradeLevel: "7th Grade", TeacherLastName: "Moore", ClassName: "English 7", DayofWeek: "Friday", TopBoxTextTurnin: "5-paragraph essay", MiddleBoxTextDailyActivities: "Grammar lesson", BottomBoxTextPracticeWork: "Verb worksheet", UpcomingText: "Vocab quiz Wednesday"},
+                // 8th Grade
+                {GradeLevel: "8th Grade", TeacherLastName: "Martinez", ClassName: "Algebra I", DayofWeek: "Tuesday", TopBoxTextTurnin: "Packet p. 5", MiddleBoxTextDailyActivities: "Solving linear equations", BottomBoxTextPracticeWork: "Problems 1-10", UpcomingText: "Unit test soon"},
+                {GradeLevel: "8th Grade", TeacherLastName: "Lee", ClassName: "US History", DayofWeek: "Wednesday", TopBoxTextTurnin: "N/A", MiddleBoxTextDailyActivities: "Civil War lecture", BottomBoxTextPracticeWork: "Read documents", UpcomingText: "DBQ on Friday"},
+                {GradeLevel: "8th Grade", TeacherLastName: "Clark", ClassName: "Physical Science", DayofWeek: "Friday", TopBoxTextTurnin: "Lab 5 Write-up", MiddleBoxTextDailyActivities: "Newton's Laws Demo", BottomBoxTextPracticeWork: "Force calculations", UpcomingText: "N/A"},
+                // Exploratories
+                {GradeLevel: "Exploratories", TeacherLastName: "Garcia", ClassName: "Art", DayofWeek: "Monday", TopBoxTextTurnin: "Sketchbook", MiddleBoxTextDailyActivities: "Intro to watercolor", BottomBoxTextPracticeWork: "Practice blending", UpcomingText: "Project due in 2 weeks"},
+                {GradeLevel: "Exploratories", TeacherLastName: "Hall", ClassName: "Music", DayofWeek: "Thursday", TopBoxTextTurnin: "Practice Log", MiddleBoxTextDailyActivities: "Playing concert pieces", BottomBoxTextPracticeWork: "Memorize measures 1-16", UpcomingText: "Concert next month"},
+            ];
+          setTimeout(() => onSuccess(mockData), 500);
+      } else {
+          fetchData();
+      }
     });
   </script>
 </body>
