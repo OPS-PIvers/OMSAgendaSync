@@ -56,15 +56,52 @@
       opacity: 0.6; /* More visible disabled state */
       cursor: not-allowed;
     }
-    /* Specific colors for Print/PDF/Confirm/Cancel buttons */
-    #print-button { background-color: #059669; border-color: #047857; } /* Emerald-600 */
-    #print-button:hover { background-color: #047857; } /* Emerald-700 */
-    #pdf-button { background-color: #e11d48; border-color: #be123c; } /* Rose-600 */
-    #pdf-button:hover { background-color: #be123c; } /* Rose-700 */
-    #confirm-pdf-button { background-color: #4f46e5; border-color: #4338ca; } /* Indigo-600 */
-    #confirm-pdf-button:hover { background-color: #4338ca; } /* Indigo-700 */
-    #cancel-pdf-button { background-color: #6b7280; border-color: #4b5563; } /* Gray-500 */
-    #cancel-pdf-button:hover { background-color: #4b5563; } /* Gray-600 */
+
+    /* Floating Action Buttons (FABs) */
+    .fab-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      z-index: 1000;
+    }
+
+    .fab-selection-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      display: none; /* Hidden by default */
+      flex-direction: column;
+      gap: 0.75rem;
+      z-index: 1000;
+    }
+
+    .fab-button {
+      width: 3.5rem; /* Size for circular button */
+      height: 3.5rem; /* Size for circular button */
+      border-radius: 50%; /* Make it circular */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem; /* Icon size */
+      color: white;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* Stronger shadow for floating effect */
+      transition: background-color 0.2s ease-in-out, transform 0.2s ease-in-out;
+      cursor: pointer;
+      border: none; /* No border for FABs */
+    }
+
+    .fab-button:hover {
+      transform: translateY(-3px); /* Slight lift on hover */
+    }
+
+    .fab-button:active {
+      transform: translateY(0); /* Press down effect */
+    }
+
+    
 
 
     /* Table specific styling */
@@ -252,17 +289,7 @@
       <button class="grade-button action-button bg-grade-exploratories" data-grade="Exploratories">Exploratories</button>
     </nav>
 
-    <!-- Print/PDF Buttons -->
-    <div class="print-buttons flex flex-wrap justify-center gap-2 mt-4 mb-4"> 
-      <button id="print-button" class="action-button bg-green-600 text-white hover:bg-green-700">Print Current View</button>
-      <button id="pdf-button" class="action-button bg-red-600 text-white hover:bg-red-700">Save as PDF</button>
-    </div>
-
-    <!-- PDF Selection Buttons (hidden by default) -->
-    <div id="pdf-selection-controls" class="pdf-selection-buttons flex flex-wrap justify-center gap-2 mt-4 mb-4"> 
-      <button id="confirm-pdf-button" class="action-button bg-blue-600 text-white hover:bg-blue-700">Confirm Selected for PDF</button>
-      <button id="cancel-pdf-button" class="action-button bg-gray-400 text-white hover:bg-gray-500">Cancel Selection</button>
-    </div>
+    
 
     <!-- Loading/Error Message -->
     <div id="message-area" class="text-center text-base text-gray-700 mb-4 hidden" role="status" aria-live="polite"></div> 
@@ -276,6 +303,26 @@
       <!-- Agenda table will be rendered here -->
     </div>
   </main>
+
+  <!-- Floating Action Buttons Container -->
+  <div class="fab-container">
+    <button id="print-button" class="fab-button print-fab" aria-label="Print Current View">
+      <i class="fas fa-print"></i>
+    </button>
+    <button id="pdf-button" class="fab-button pdf-fab" aria-label="Save as PDF">
+      <i class="fas fa-file-pdf"></i>
+    </button>
+  </div>
+
+  <!-- PDF Selection Floating Buttons (hidden by default) -->
+  <div id="pdf-selection-controls" class="fab-selection-container">
+    <button id="confirm-pdf-button" class="fab-button confirm-fab" aria-label="Confirm Selected for PDF">
+      <i class="fas fa-check"></i>
+    </button>
+    <button id="cancel-pdf-button" class="fab-button cancel-fab" aria-label="Cancel Selection">
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
 
   <script>
     // Global variable to store all fetched agenda data
@@ -524,8 +571,7 @@
       hideLoadingSpinner();
       showMessage(`Error loading agendas: ${error.message}. Please try again later.`, 'error');
       console.error('Error fetching data:', error);
-      printButton.classList.add('hidden');
-      pdfButton.classList.add('hidden');
+      fabContainer.classList.add('hidden');
     }
 
     // --- Print and PDF Functions ---
