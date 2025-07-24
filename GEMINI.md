@@ -4,7 +4,7 @@ This document outlines the standard deployment process for the OMSAgendaSync web
 
 ## Process Steps
 
-After making any changes to the codebase (e.g., `Code.js`, `index.html`, `appsscript.json`):
+After *every* update to the codebase (e.g., `Code.js`, `index.html`, `appsscript.json`), the following deployment steps *must* be performed:
 
 1.  **Stage Changes:**
     Add all modified files to the Git staging area.
