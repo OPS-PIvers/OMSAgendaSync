@@ -735,30 +735,7 @@
       generatePdfButton.addEventListener('click', generatePdf);
 
       // Initial Data Fetch
-      if (typeof google === 'undefined' || !google.script || !google.script.run) {
-          console.warn("Running in local mode. Using mock data.");
-          const mockData = [
-                // 6th Grade
-                {GradeLevel: "6th Grade", TeacherLastName: "Johnson", ClassName: "Math 6", DayofWeek: "Monday", TopBoxTextTurnin: "Homework 3.1", MiddleBoxTextDailyActivities: "Lesson on fractions\nGroup work practice", BottomBoxTextPracticeWork: "Worksheet 3.2", UpcomingText: "Quiz on Friday"},
-                {GradeLevel: "6th Grade", TeacherLastName: "Williams", ClassName: "Science 6", DayofWeek: "Wednesday", TopBoxTextTurnin: "Lab Report Draft", MiddleBoxTextDailyActivities: "Cell mitosis lecture. This is a longer description to demonstrate how the text will wrap or be truncated in the summary view before the user expands the row to see all of the details.", BottomBoxTextPracticeWork: "Read Chapter 4", UpcomingText: "Test next week"},
-                {GradeLevel: "6th Grade", TeacherLastName: "Miller", ClassName: "English 6", DayofWeek: "Friday", TopBoxTextTurnin: "Book Report", MiddleBoxTextDailyActivities: "Peer review session", BottomBoxTextPracticeWork: "N/A", UpcomingText: "New novel next week"},
-                // 7th Grade
-                {GradeLevel: "7th Grade", TeacherLastName: "Davis", ClassName: "History 7", DayofWeek: "Tuesday", TopBoxTextTurnin: "Map of Colonies", MiddleBoxTextDailyActivities: "American Revolution discussion", BottomBoxTextPracticeWork: "Primary source analysis", UpcomingText: "Essay due Thursday"},
-                {GradeLevel: "7th Grade", TeacherLastName: "Brown", ClassName: "Pre-Algebra", DayofWeek: "Thursday", TopBoxTextTurnin: "Worksheet 7B", MiddleBoxTextDailyActivities: "Review for test", BottomBoxTextPracticeWork: "Practice test", UpcomingText: "Test on Friday"},
-                {GradeLevel: "7th Grade", TeacherLastName: "Wilson", ClassName: "Life Science", DayofWeek: "Friday", TopBoxTextTurnin: "Diorama of Biome", MiddleBoxTextDailyActivities: "Presentations", BottomBoxTextPracticeWork: "N/A", UpcomingText: "N/A"},
-                {GradeLevel: "7th Grade", TeacherLastName: "Moore", ClassName: "English 7", DayofWeek: "Friday", TopBoxTextTurnin: "5-paragraph essay", MiddleBoxTextDailyActivities: "Grammar lesson", BottomBoxTextPracticeWork: "Verb worksheet", UpcomingText: "Vocab quiz Wednesday"},
-                // 8th Grade
-                {GradeLevel: "8th Grade", TeacherLastName: "Martinez", ClassName: "Algebra I", DayofWeek: "Tuesday", TopBoxTextTurnin: "Packet p. 5", MiddleBoxTextDailyActivities: "Solving linear equations", BottomBoxTextPracticeWork: "Problems 1-10", UpcomingText: "Unit test soon"},
-                {GradeLevel: "8th Grade", TeacherLastName: "Lee", ClassName: "US History", DayofWeek: "Wednesday", TopBoxTextTurnin: "N/A", MiddleBoxTextDailyActivities: "Civil War lecture", BottomBoxTextPracticeWork: "Read documents", UpcomingText: "DBQ on Friday"},
-                {GradeLevel: "8th Grade", TeacherLastName: "Clark", ClassName: "Physical Science", DayofWeek: "Friday", TopBoxTextTurnin: "Lab 5 Write-up", MiddleBoxTextDailyActivities: "Newton's Laws Demo", BottomBoxTextPracticeWork: "Force calculations", UpcomingText: "N/A"},
-                // Exploratories
-                {GradeLevel: "Exploratories", TeacherLastName: "Garcia", ClassName: "Art", DayofWeek: "Monday", TopBoxTextTurnin: "Sketchbook", MiddleBoxTextDailyActivities: "Intro to watercolor", BottomBoxTextPracticeWork: "Practice blending", UpcomingText: "Project due in 2 weeks"},
-                {GradeLevel: "Exploratories", TeacherLastName: "Hall", ClassName: "Music", DayofWeek: "Thursday", TopBoxTextTurnin: "Practice Log", MiddleBoxTextDailyActivities: "Playing concert pieces", BottomBoxTextPracticeWork: "Memorize measures 1-16", UpcomingText: "Concert next month"}
-            ];
-          setTimeout(() => onSuccess(mockData), 500);
-      } else {
-          fetchData();
-      }
+      fetchData();
     });
   </script>
 </body>
