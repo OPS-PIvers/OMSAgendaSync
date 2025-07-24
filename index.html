@@ -541,6 +541,7 @@
 
     function onSuccess(data) {
       hideLoadingSkeletons();
+      console.log('Data received from server:', data);
       allAgendaData = data;
       renderAllContent(currentGradeFilter);
     }
