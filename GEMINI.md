@@ -33,7 +33,7 @@ After *every* update to the codebase (e.g., `Code.js`, `index.html`, `appsscript
 5.  **Update Active Web App Deployment:**
     After `clasp push`, you need to update the deployed web app to reflect the latest code. This is crucial because `clasp push` only updates the script project, not the deployed version.
 
-    To update the deployment, you will use the `clasp deploy` command with the deployment ID.
+    To update the deployment, you will use the `clasp redeploy` command with the deployment ID.
 
     **Setting the Deployment ID:**
     For security and convenience, it is highly recommended to export your web app's deployment ID as an environment variable in your terminal session or shell configuration (e.g., `.bashrc`, `.zshrc`).
@@ -46,8 +46,9 @@ After *every* update to the codebase (e.g., `Code.js`, `index.html`, `appsscript
 
     Then, update the deployment using the environment variable:
     ```bash
-    clasp deploy --deploymentId $CLASP_DEPLOYMENT_ID --versionNumber $(clasp versions | tail -n 1 | awk '{print $1}')
+    clasp redeploy $CLASP_DEPLOYMENT_ID --versionNumber <LATEST_VERSION_NUMBER>
     ```
-    This command creates a new version and updates the specified deployment to use that new version. The `$(clasp versions | tail -n 1 | awk '{print $1}')` part automatically fetches the latest version number from your GAS project.
+    (Replace `<LATEST_VERSION_NUMBER>` with the actual latest version number. You can find this by running `clasp versions` and looking at the highest number.)
+    This command updates the specified deployment to use the new version.
 
     **Important:** After updating the deployment, it's often necessary to clear your browser's cache or open the web app in an incognito/private window to ensure you are viewing the latest deployed version.
