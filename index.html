@@ -310,9 +310,30 @@
     <button id="print-button" class="fab-button print-fab" aria-label="Print Current View" title="Print View">
       <i class="fas fa-print"></i>
     </button>
-    <button id="pdf-button" class="fab-button pdf-fab" aria-label="Save as PDF" title="Save as PDF" disabled>
+    <button id="pdf-button" class="fab-button pdf-fab" aria-label="Save as PDF" title="Save as PDF">
       <i class="fas fa-file-pdf"></i>
     </button>
+  </div>
+
+  <!-- PDF Modal -->
+  <div id="pdf-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-2000 hidden">
+    <div class="bg-white rounded-lg shadow-2xl p-8 max-w-4xl w-full transform transition-all">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Create Professional PDF</h2>
+        <button id="close-modal-button" class="text-gray-500 hover:text-gray-800">&times;</button>
+      </div>
+      <p class="text-gray-600 mb-6">Select the rows you want to include in your Daily Agenda PDF. Click "Generate PDF" when you're ready.</p>
+      <div id="pdf-selection-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
+        <!-- Checkbox items will be populated here -->
+      </div>
+      <div class="mt-8 flex justify-end gap-4">
+        <button id="cancel-pdf-button" class="px-6 py-2 rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Cancel</button>
+        <button id="generate-pdf-button" class="px-6 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-2">
+          <i class="fas fa-file-alt"></i>
+          Generate PDF
+        </button>
+      </div>
+    </div>
   </div>
   
   <script>
@@ -539,6 +560,135 @@
       setTimeout(() => window.print(), 100); // Allow time for DOM to update
     }
 
+    function populatePdfModal() {
+        const selectionContainer = document.getElementById('pdf-selection-container');
+        selectionContainer.innerHTML = '';
+        const filteredData = allAgendaData.filter(item => item.GradeLevel === currentGradeFilter);
+
+        if (filteredData.length === 0) {
+            selectionContainer.innerHTML = '<p class="text-gray-500">No agendas to select for this grade.</p>';
+            return;
+        }
+
+        filteredData.forEach((agenda, index) => {
+            const checkboxId = `pdf-checkbox-${index}`;
+            const item = document.createElement('div');
+            item.className = 'flex items-center p-3 bg-white rounded-lg shadow-sm';
+            item.innerHTML = `
+                <input type="checkbox" id="${checkboxId}" data-index="${index}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <label for="${checkboxId}" class="ml-3 text-sm font-medium text-gray-800">
+                    <span class="font-bold">${agenda.ClassName}</span> (${agenda.TeacherLastName})
+                </label>
+            `;
+            selectionContainer.appendChild(item);
+        });
+    }
+
+    async function generatePdf() {
+        const { jsPDF } = window.jspdf;
+        const selectedCheckboxes = document.querySelectorAll('#pdf-selection-container input[type="checkbox"]:checked');
+        if (selectedCheckboxes.length === 0) {
+            alert('Please select at least one agenda item to include in the PDF.');
+            return;
+        }
+
+        const doc = new jsPDF({
+            orientation: 'portrait',
+            unit: 'in',
+            format: 'letter'
+        });
+
+        const today = new Date();
+        const formattedDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+        // --- PDF Styling ---
+        const pageMargin = 0.75;
+        const contentWidth = doc.internal.pageSize.getWidth() - (pageMargin * 2);
+        let cursorY = pageMargin;
+
+        // --- PDF Header ---
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(24);
+        doc.setTextColor('#1f2937');
+        doc.text('Daily Agenda', pageMargin, cursorY);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(12);
+        doc.setTextColor('#6b7280');
+        doc.text(formattedDate, doc.internal.pageSize.getWidth() - pageMargin, cursorY, { align: 'right' });
+
+        cursorY += 0.2;
+        doc.setDrawColor('#e5e7eb');
+        doc.setLineWidth(0.01);
+        doc.line(pageMargin, cursorY, doc.internal.pageSize.getWidth() - pageMargin, cursorY);
+        cursorY += 0.4;
+
+        // --- PDF Body ---
+        for (let i = 0; i < selectedCheckboxes.length; i++) {
+            const checkbox = selectedCheckboxes[i];
+            const dataIndex = parseInt(checkbox.dataset.index, 10);
+            const filteredData = allAgendaData.filter(item => item.GradeLevel === currentGradeFilter);
+            const agenda = filteredData[dataIndex];
+
+            const sectionStartY = cursorY;
+
+            // Check for page break
+            // Simple check: estimate height and break if it overflows. A more robust solution
+            // would calculate the height of the text block more precisely.
+            const estimatedHeight = 1.5; // Rough estimate in inches
+            if (cursorY + estimatedHeight > doc.internal.pageSize.getHeight() - pageMargin) {
+                doc.addPage();
+                cursorY = pageMargin;
+            }
+
+            // Class & Teacher
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(16);
+            doc.setTextColor('#3b82f6'); // Blue-500
+            doc.text(agenda.ClassName, pageMargin, cursorY);
+
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(11);
+            doc.setTextColor('#4b5563');
+            doc.text(`Teacher: ${agenda.TeacherLastName}`, doc.internal.pageSize.getWidth() - pageMargin, cursorY, { align: 'right' });
+            cursorY += 0.25;
+
+            // Agenda Details
+            const addSection = (title, text) => {
+                if (!text || text.toLowerCase() === 'n/a') return;
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(10);
+                doc.setTextColor('#1f2937');
+                doc.text(title, pageMargin + 0.1, cursorY);
+                cursorY += 0.15;
+
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(10);
+                doc.setTextColor('#374151');
+                const splitText = doc.splitTextToSize(text, contentWidth - 0.2);
+                doc.text(splitText, pageMargin + 0.2, cursorY);
+                cursorY += (splitText.length * 0.15) + 0.1;
+            };
+
+            addSection('Turn In:', agenda.TopBoxTextTurnin);
+            addSection('Daily Activities:', agenda.MiddleBoxTextDailyActivities);
+            addSection('Practice / Homework:', agenda.BottomBoxTextPracticeWork);
+            addSection('Upcoming:', agenda.UpcomingText);
+
+            // Add a separator line
+            cursorY += 0.1;
+            if (i < selectedCheckboxes.length - 1) {
+                doc.setDrawColor('#d1d5db');
+                doc.setLineWidth(0.01);
+                doc.line(pageMargin, cursorY, doc.internal.pageSize.getWidth() - pageMargin, cursorY);
+                cursorY += 0.25;
+            }
+        }
+
+        doc.save(`Daily_Agenda_${currentGradeFilter.replace(' ', '_')}_${today.toISOString().slice(0,10)}.pdf`);
+    }
+
+
     // --- Event Listeners ---
 
     gradeButtons.forEach(button => {
@@ -559,8 +709,21 @@
     });
 
     printButton.addEventListener('click', printAgendas);
-    // PDF button is disabled as selection is more complex in this view.
-    // pdfButton.addEventListener('click', generatePdf);
+    
+    const pdfModal = document.getElementById('pdf-modal');
+    const closeModalButton = document.getElementById('close-modal-button');
+    const cancelPdfButton = document.getElementById('cancel-pdf-button');
+    const generatePdfButton = document.getElementById('generate-pdf-button');
+
+    pdfButton.addEventListener('click', () => {
+        populatePdfModal();
+        pdfModal.classList.remove('hidden');
+    });
+
+    closeModalButton.addEventListener('click', () => pdfModal.classList.add('hidden'));
+    cancelPdfButton.addEventListener('click', () => pdfModal.classList.add('hidden'));
+    generatePdfButton.addEventListener('click', generatePdf);
+
 
     // --- Initialization ---
     document.addEventListener('DOMContentLoaded', () => {
