@@ -33,7 +33,7 @@ After *every* update to the codebase (e.g., `Code.js`, `index.html`, `appsscript
 5.  **Update Active Web App Deployment:**
     I will automatically perform `clasp redeploy` after a successful `clasp push`.
     ```bash
-    clasp redeploy AKfycbzWZD2iUIPMwpJAJ5fE53_372YP_sz4XR2U6nYl0dQjsImIcSf_8F_-qzEn7rS3tVWzdA --versionNumber <LATEST_VERSION_NUMBER>
+    clasp redeploy AKfycbwtKGbS9PtKwSVgHUsN03r451weFHmEkK2QrtsLx0_XwmDoiFWa53rwXcn3TqoFRSKDWg --versionNumber <LATEST_VERSION_NUMBER>
     ```
     (Replace `<LATEST_VERSION_NUMBER>` with the actual latest version number. I will determine this automatically.)
 
