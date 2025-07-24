@@ -689,44 +689,9 @@
     }
 
 
-    // --- Event Listeners ---
-
-    gradeButtons.forEach(button => {
-      button.addEventListener('click', () => {
-        currentGradeFilter = button.dataset.grade;
-        gradeButtons.forEach(btn => btn.classList.remove('active'));
-        button.classList.add('active');
-        updateActiveGradePill(button);
-        renderAllContent(currentGradeFilter);
-      });
-    });
-    
-    window.addEventListener('resize', () => {
-        const activeButton = document.querySelector('.grade-button.active');
-        if (activeButton) {
-            updateActiveGradePill(activeButton);
-        }
-    });
-
-    printButton.addEventListener('click', printAgendas);
-    
-    const pdfModal = document.getElementById('pdf-modal');
-    const closeModalButton = document.getElementById('close-modal-button');
-    const cancelPdfButton = document.getElementById('cancel-pdf-button');
-    const generatePdfButton = document.getElementById('generate-pdf-button');
-
-    pdfButton.addEventListener('click', () => {
-        populatePdfModal();
-        pdfModal.classList.remove('hidden');
-    });
-
-    closeModalButton.addEventListener('click', () => pdfModal.classList.add('hidden'));
-    cancelPdfButton.addEventListener('click', () => pdfModal.classList.add('hidden'));
-    generatePdfButton.addEventListener('click', generatePdf);
-
-
-    // --- Initialization ---
+    // --- Initialization & Event Listeners ---
     document.addEventListener('DOMContentLoaded', () => {
+      // Initial Setup
       const today = new Date();
       const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
       currentDateDisplay.textContent = today.toLocaleDateString('en-US', options);
@@ -735,6 +700,41 @@
       initialButton.classList.add('active');
       updateActiveGradePill(initialButton);
 
+      // Attach all event listeners after the DOM is fully loaded
+      gradeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          currentGradeFilter = button.dataset.grade;
+          gradeButtons.forEach(btn => btn.classList.remove('active'));
+          button.classList.add('active');
+          updateActiveGradePill(button);
+          renderAllContent(currentGradeFilter);
+        });
+      });
+    
+      window.addEventListener('resize', () => {
+          const activeButton = document.querySelector('.grade-button.active');
+          if (activeButton) {
+              updateActiveGradePill(activeButton);
+          }
+      });
+
+      printButton.addEventListener('click', printAgendas);
+    
+      const pdfModal = document.getElementById('pdf-modal');
+      const closeModalButton = document.getElementById('close-modal-button');
+      const cancelPdfButton = document.getElementById('cancel-pdf-button');
+      const generatePdfButton = document.getElementById('generate-pdf-button');
+
+      pdfButton.addEventListener('click', () => {
+          populatePdfModal();
+          pdfModal.classList.remove('hidden');
+      });
+
+      closeModalButton.addEventListener('click', () => pdfModal.classList.add('hidden'));
+      cancelPdfButton.addEventListener('click', () => pdfModal.classList.add('hidden'));
+      generatePdfButton.addEventListener('click', generatePdf);
+
+      // Initial Data Fetch
       if (typeof google === 'undefined' || !google.script || !google.script.run) {
           console.warn("Running in local mode. Using mock data.");
           const mockData = [
@@ -753,7 +753,7 @@
                 {GradeLevel: "8th Grade", TeacherLastName: "Clark", ClassName: "Physical Science", DayofWeek: "Friday", TopBoxTextTurnin: "Lab 5 Write-up", MiddleBoxTextDailyActivities: "Newton's Laws Demo", BottomBoxTextPracticeWork: "Force calculations", UpcomingText: "N/A"},
                 // Exploratories
                 {GradeLevel: "Exploratories", TeacherLastName: "Garcia", ClassName: "Art", DayofWeek: "Monday", TopBoxTextTurnin: "Sketchbook", MiddleBoxTextDailyActivities: "Intro to watercolor", BottomBoxTextPracticeWork: "Practice blending", UpcomingText: "Project due in 2 weeks"},
-                {GradeLevel: "Exploratories", TeacherLastName: "Hall", ClassName: "Music", DayofWeek: "Thursday", TopBoxTextTurnin: "Practice Log", MiddleBoxTextDailyActivities: "Playing concert pieces", BottomBoxTextPracticeWork: "Memorize measures 1-16", UpcomingText: "Concert next month"},
+                {GradeLevel: "Exploratories", TeacherLastName: "Hall", ClassName: "Music", DayofWeek: "Thursday", TopBoxTextTurnin: "Practice Log", MiddleBoxTextDailyActivities: "Playing concert pieces", BottomBoxTextPracticeWork: "Memorize measures 1-16", UpcomingText: "Concert next month"}
             ];
           setTimeout(() => onSuccess(mockData), 500);
       } else {
