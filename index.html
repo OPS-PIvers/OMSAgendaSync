@@ -8,6 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -65,120 +66,69 @@
     .bg-grade-6th { background-color: #6366f1; } /* Indigo-500 */
     .bg-grade-7th { background-color: #14b8a6; } /* Teal-500 */
     .bg-grade-8th { background-color: #a855f7; } /* Purple-500 */
-    .bg-grade-exploratories { background-color: #f43f5e; } /* Rose-500 */
 
-    /* --- Agenda Row Styling --- */
-    .agenda-row {
-        background-color: #ffffff;
+    /* --- Smart Card Layout --- */
+    .agenda-card {
+        background-color: transparent;
         border-radius: 0.75rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        transition: all 0.2s ease-in-out;
-        border: 1px solid #e5e7eb;
-        cursor: pointer;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        border: 1px solid; /* Border color will be set by JS */
+        padding: 1.5rem;
+        transition: all 0.3s ease-in-out;
     }
-    .agenda-row:hover {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.07);
-        border-color: #d1d5db;
-    }
-    
-    .row-content-wrapper {
+
+    .card-content-grid {
         display: grid;
-        grid-template-columns: 1.5fr 2fr 2fr 2fr 2fr 0.5fr;
+        grid-template-columns: repeat(4, 1fr);
         gap: 1.5rem;
-        padding: 1rem 1.5rem;
-        align-items: start; /* Align to top for the new layout */
     }
 
-    .cell-item {
-      min-width: 0; /* Prevents flexbox overflow */
+    .content-section {
+        display: flex;
+        flex-direction: column;
     }
 
-    .cell-label {
-      font-size: 0.75rem; /* 12px */
-      font-weight: 600;
-      text-transform: uppercase;
-      color: #9ca3af; /* gray-400 */
-      margin-bottom: 0.125rem;
+    .section-label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #9ca3af;
+        margin-bottom: 0.25rem;
     }
 
-    .cell-content {
-      font-weight: 600;
-      color: #1f2937; /* gray-800 */
-      /* Default state: single line, truncated */
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    
-    /* Expanded state styling */
-    .agenda-row.expanded .cell-content {
-        white-space: pre-wrap; /* Allow wrapping and respect newlines */
-        overflow: visible;
-        text-overflow: clip;
+    .section-text {
+        font-size: 0.9rem;
+        color: #374151;
+        line-height: 1.5;
+        max-height: 4.5em; /* Approx 3 lines */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        position: relative;
+        transition: max-height 0.3s ease-in-out;
+        /* Allow word breaks for long links */
         word-break: break-word;
     }
     
-    .toggle-icon {
-        transition: transform 0.3s ease;
-        padding-top: 0.25rem; /* Align with content */
-    }
-    
-    .agenda-row.expanded .toggle-icon {
-        transform: rotate(180deg);
-    }
-    
-    .expand-cell {
-        text-align: right;
+    .agenda-card.expanded .section-text {
+        max-height: 500px; /* A large value to allow full expansion */
     }
 
-    /* --- Workload Stats Chart --- */
-    .stats-card {
-        background-color: #fff;
-        border-radius: 1rem;
-        padding: 1.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
-    }
-    .chart-container {
-        display: flex;
-        justify-content: space-around;
-        align-items: flex-end;
-        height: 150px;
-        border-bottom: 2px solid #e5e7eb;
-        padding-bottom: 0.5rem;
-    }
-    .chart-bar-wrapper {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        width: 15%;
-    }
-    .chart-bar {
-        width: 100%;
-        background-color: #a5b4fc; /* Indigo-300 */
-        border-radius: 0.25rem 0.25rem 0 0;
-        transition: height 0.5s ease-out;
-        position: relative;
-    }
-    .bar-value {
-        position: absolute;
-        top: -1.5rem;
-        left: 50%;
-        transform: translateX(-50%);
+    .show-more-btn {
+        font-size: 0.8rem;
         font-weight: 600;
-        color: #374151;
-        opacity: 0;
-        transition: opacity 0.3s;
-    }
-    .chart-bar:hover .bar-value {
-        opacity: 1;
-    }
-    .day-label {
+        color: #4f46e5;
+        cursor: pointer;
         margin-top: 0.5rem;
-        font-size: 0.875rem;
-        font-weight: 500;
-        color: #6b7280;
+        background: none;
+        border: none;
+        padding: 0;
+        text-align: left;
     }
     
+    .show-more-btn:hover {
+        text-decoration: underline;
+    }
+
     /* --- Floating Action Buttons (FABs) --- */
     .fab-container {
       position: fixed;
@@ -232,38 +182,14 @@
       body { background-color: #fff; }
       .no-print { display: none !important; }
       #main-content { padding: 0.5in; }
-      .agenda-row {
+      .agenda-card {
         box-shadow: none;
-        border: 1px solid #ccc;
-        page-break-inside: avoid;
-        transform: none !important;
+        border: 1px solid #ccc !important;
+        background-color: #fff !important;
       }
-      .agenda-row.expanded .cell-content, .cell-content {
-          white-space: pre-wrap !important;
-          overflow: visible !important;
+      .section-text {
+        max-height: none !important; /* Ensure all text prints */
       }
-      .toggle-icon { display: none; }
-    }
-    
-    /* Responsive grid for smaller screens */
-    @media (max-width: 1200px) {
-        .row-content-wrapper {
-            grid-template-columns: 1fr;
-            padding-bottom: 0.5rem;
-        }
-        .row-content-wrapper > div:not(:first-child) {
-            padding-top: 0.5rem;
-        }
-        .teacher-info {
-            padding-bottom: 0.5rem !important;
-            border-bottom: 1px solid #e5e7eb;
-            margin-bottom: 0.5rem;
-        }
-        .expand-cell {
-            position: absolute;
-            top: 1rem;
-            right: 1.5rem;
-        }
     }
   </style>
 </head>
@@ -272,7 +198,7 @@
   <div class="container mx-auto px-4 py-8">
     <!-- Header -->
     <header class="text-center mb-8 no-print">
-      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 tracking-tight mb-2">Daily Agendas</h1>
+      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 tracking-tight mb-2">Daily Snapshot</h1>
       <p id="current-date" class="text-lg text-gray-500"></p>
     </header>
 
@@ -283,23 +209,19 @@
         <button class="grade-button" data-grade="6th Grade">6th Grade</button>
         <button class="grade-button" data-grade="7th Grade">7th Grade</button>
         <button class="grade-button" data-grade="8th Grade">8th Grade</button>
-        <button class="grade-button" data-grade="Exploratories">Exploratories</button>
       </div>
     </nav>
     
     <!-- Message Area -->
-    <div id="message-area" class="text-center text-lg text-gray-700 mb-6 hidden" role="status" aria-live="polite"></div>
+    <div id="message-area" class="text-center text-lg text-gray-700 mb-6" role="status" aria-live="polite"></div>
 
     <!-- Main Content Area -->
     <main id="main-content">
-        <!-- Agenda Display Area -->
-        <div id="agenda-container" class="flex flex-col gap-3">
-          <!-- Agenda rows will be rendered here -->
+        <div id="agenda-container" class="space-y-4">
+          <!-- Smart Cards will be rendered here -->
         </div>
-
-        <!-- Workload Statistics -->
-        <!-- <div id="stats-container" class="mb-8 no-print"></div> -->
-        <div id="loading-container" class="flex flex-col gap-3">
+        
+        <div id="loading-container" class="space-y-4">
           <!-- Skeleton loaders will be shown here -->
         </div>
     </main>
@@ -351,41 +273,33 @@
     const fabContainer = document.getElementById('fab-container');
     const printButton = document.getElementById('print-button');
     const pdfButton = document.getElementById('pdf-button');
-    const statsContainer = document.getElementById('stats-container');
 
     // --- UI Update Functions ---
 
     function showMessage(msg, type = 'info') {
       messageArea.textContent = msg;
-      messageArea.className = 'text-center text-lg mb-6'; // Reset classes
-      if (type === 'error') messageArea.classList.add('text-red-600');
+      messageArea.className = 'text-center text-lg text-gray-700 mb-6';
+      if (type === 'error') messageArea.classList.add('text-red-600', 'font-semibold');
       else if (type === 'success') messageArea.classList.add('text-green-600');
-      else messageArea.classList.add('text-gray-700');
     }
 
     function hideMessage() {
-      messageArea.classList.add('hidden');
       messageArea.textContent = '';
     }
     
-    function showLoadingSkeletons(count = 5) {
+    function showLoadingSkeletons(count = 3) {
         agendaContainer.innerHTML = '';
         loadingContainer.innerHTML = '';
-        statsContainer.innerHTML = '';
         hideMessage();
         for (let i = 0; i < count; i++) {
             const skeleton = `
                 <div class="skeleton-row">
-                    <div class="grid grid-cols-6 gap-4 items-center p-4">
-                        <div class="col-span-1">
-                            <div class="skeleton h-5 w-3/4"></div>
-                            <div class="skeleton h-4 w-1/2 mt-2"></div>
-                        </div>
-                        <div class="skeleton h-8 w-full col-span-1"></div>
-                        <div class="skeleton h-8 w-full col-span-1"></div>
-                        <div class="skeleton h-8 w-full col-span-1"></div>
-                        <div class="skeleton h-8 w-full col-span-1"></div>
-                        <div class="skeleton h-8 w-full col-span-1"></div>
+                    <div class="skeleton h-6 w-1/2 mb-4"></div>
+                    <div class="flex gap-4">
+                        <div class="skeleton h-16 w-full"></div>
+                        <div class="skeleton h-16 w-full"></div>
+                        <div class="skeleton h-16 w-full"></div>
+                        <div class="skeleton h-16 w-full"></div>
                     </div>
                 </div>
             `;
@@ -402,11 +316,10 @@
         const pillColorClass = {
             '6th Grade': 'bg-grade-6th',
             '7th Grade': 'bg-grade-7th',
-            '8th Grade': 'bg-grade-8th',
-            'Exploratories': 'bg-grade-exploratories'
+            '8th Grade': 'bg-grade-8th'
         }[grade];
 
-        activeGradePill.className = 'absolute'; // Reset classes
+        activeGradePill.className = 'absolute top-1 bottom-1 rounded-full';
         activeGradePill.classList.add(pillColorClass);
         
         setTimeout(() => {
@@ -416,88 +329,74 @@
     }
 
     // --- Data Rendering ---
-
-    function createAgendaRow(agenda, index) {
-        const row = document.createElement('div');
-        row.className = 'agenda-row';
-        row.id = `agenda-row-${index}`;
-
-        // Helper to create the new cell format
-        const createCell = (label, content) => {
-            const safeContent = content || 'N/A';
-            return `
-                <div class="cell-item">
-                    <p class="cell-label">${label}</p>
-                    <p class="cell-content">${safeContent.replace(/\n/g, ' ')}</p>
-                </div>
-            `;
-        };
-
-        row.innerHTML = `
-            <div class="row-content-wrapper">
-                <div class="cell-item teacher-info">
-                    <p class="cell-content" style="font-weight: 700;">${agenda.ClassName}</p>
-                    <p class="cell-label" style="text-transform: none; font-weight: 500;">${agenda.TeacherLastName}</p>
-                </div>
-                ${createCell('Turn In', agenda.TopBoxTextTurnin)}
-                ${createCell('Activities', agenda.MiddleBoxTextDailyActivities)}
-                ${createCell('Practice', agenda.BottomBoxTextPracticeWork)}
-                ${createCell('Upcoming', agenda.UpcomingText)}
-                <div class="expand-cell text-right text-gray-400">
-                    <i class="fas fa-chevron-down toggle-icon"></i>
-                </div>
-            </div>
-        `;
-        
-        row.addEventListener('click', () => {
-            row.classList.toggle('expanded');
-        });
-
-        return row;
-    }
     
-    function renderWorkloadStats(gradeFilter) {
-        const filteredData = allAgendaData.filter(item => item.GradeLevel === gradeFilter);
-        const workload = { 'Monday': 0, 'Tuesday': 0, 'Wednesday': 0, 'Thursday': 0, 'Friday': 0 };
-        
-        filteredData.forEach(item => {
-            if (item.DayofWeek && workload.hasOwnProperty(item.DayofWeek)) {
-                if (item.TopBoxTextTurnin && item.TopBoxTextTurnin.toLowerCase() !== 'n/a' && item.TopBoxTextTurnin.trim() !== '') {
-                    workload[item.DayofWeek]++;
-                }
-            }
-        });
-        
-        const maxWorkload = Math.max(...Object.values(workload), 1);
-        const pillColorClass = {
-            '6th Grade': 'bg-grade-6th',
-            '7th Grade': 'bg-grade-7th',
-            '8th Grade': 'bg-grade-8th',
-            'Exploratories': 'bg-grade-exploratories'
-        }[gradeFilter];
-
-        let chartHTML = `
-            <div class="stats-card">
-                <h2 class="text-xl font-bold text-gray-800 mb-4">Weekly Workload: Items Due</h2>
-                <div class="chart-container">
-        `;
-
-        for (const day in workload) {
-            const count = workload[day];
-            const barHeight = (count / maxWorkload) * 100;
-            chartHTML += `
-                <div class="chart-bar-wrapper">
-                    <div class="chart-bar ${pillColorClass}" style="height: ${barHeight}%;" title="${count} items due on ${day}">
-                        <span class="bar-value">${count}</span>
-                    </div>
-                    <span class="day-label">${day.substring(0,3)}</span>
-                </div>
-            `;
-        }
-
-        chartHTML += `</div></div>`;
-        statsContainer.innerHTML = chartHTML;
+    function getSubjectColors(className = '') {
+        const name = className.toLowerCase();
+        if (name.includes('math')) return { headerClass: 'text-blue-800', cardClasses: 'bg-blue-50 border-blue-200' };
+        if (name.includes('english') || name.includes('reading') || name.includes('language')) return { headerClass: 'text-red-800', cardClasses: 'bg-red-50 border-red-200' };
+        if (name.includes('science')) return { headerClass: 'text-green-800', cardClasses: 'bg-green-50 border-green-200' };
+        if (name.includes('social') || name.includes('history')) return { headerClass: 'text-yellow-800', cardClasses: 'bg-yellow-50 border-yellow-200' };
+        if (name.includes('exploratory') || name.includes('art') || name.includes('music') || name.includes('tech') || name.includes('band') || name.includes('computer')) return { headerClass: 'text-purple-800', cardClasses: 'bg-purple-50 border-purple-200' };
+        return { headerClass: 'text-gray-800', cardClasses: 'bg-white border-gray-200' };
     }
+
+    function createAgendaCard(agenda) {
+        const card = document.createElement('div');
+        card.className = 'agenda-card';
+
+        const safeText = (text) => (text || 'N/A').replace(/\n/g, '<br>').replace(/→/g, '<span class="mr-2 text-indigo-500">→</span>');
+
+        const createSection = (label, content) => {
+            const section = document.createElement('div');
+            section.className = 'content-section';
+            
+            const textElement = document.createElement('div');
+            textElement.className = 'section-text';
+            
+            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/i;
+            const match = typeof content === 'string' ? content.match(hyperlinkRegex) : null;
+
+            if (match) {
+                const url = match[1];
+                const linkText = match[2].replace(/""/g, '"');
+                textElement.innerHTML = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${safeText(linkText)}</a>`;
+            } else {
+                textElement.innerHTML = safeText(content);
+            }
+
+            section.innerHTML = `<h3 class="section-label">${label}</h3>`;
+            section.appendChild(textElement);
+            
+            setTimeout(() => {
+                if (textElement.scrollHeight > textElement.clientHeight) {
+                    const button = document.createElement('button');
+                    button.className = 'show-more-btn';
+                    button.textContent = 'Show More';
+                    button.onclick = (e) => {
+                        e.stopPropagation();
+                        const parentCard = e.target.closest('.agenda-card');
+                        parentCard.classList.toggle('expanded');
+                        e.target.textContent = parentCard.classList.contains('expanded') ? 'Show Less' : 'Show More';
+                    };
+                    section.appendChild(button);
+                }
+            }, 100);
+
+            return section;
+        };
+        
+        const contentGrid = document.createElement('div');
+        contentGrid.className = 'card-content-grid';
+
+        contentGrid.appendChild(createSection('Turn In', agenda.TurnIn));
+        contentGrid.appendChild(createSection('Daily Activities', agenda.Activities));
+        contentGrid.appendChild(createSection('Practice / Homework', agenda.PracticeWork));
+        contentGrid.appendChild(createSection('Upcoming', agenda.Upcoming));
+        
+        card.appendChild(contentGrid);
+        return card;
+    }
+
 
     function renderAllContent(gradeFilter) {
       agendaContainer.innerHTML = '';
@@ -505,8 +404,6 @@
 
       const filteredData = allAgendaData.filter(item => item.GradeLevel === gradeFilter);
       
-      renderWorkloadStats(gradeFilter);
-
       if (filteredData.length === 0) {
         showMessage(`No agendas available for ${gradeFilter} today.`, 'info');
         fabContainer.classList.add('hidden');
@@ -514,9 +411,23 @@
       }
 
       fabContainer.classList.remove('hidden');
-      filteredData.forEach((agenda, index) => {
-        const row = createAgendaRow(agenda, index);
-        agendaContainer.appendChild(row);
+      
+      filteredData.forEach(agenda => {
+          const itemWrapper = document.createElement('div');
+          const colors = getSubjectColors(agenda.ClassName || '');
+          
+          const header = document.createElement('h2');
+          header.className = `text-lg font-bold mb-2 ${colors.headerClass}`;
+          const className = agenda.ClassName || 'Class';
+          const teacherName = agenda.TeacherLastName || 'Teacher';
+          header.innerHTML = `${className} <span class="text-base font-medium text-gray-500">&mdash; ${teacherName}</span>`;
+          itemWrapper.appendChild(header);
+
+          const card = createAgendaCard(agenda);
+          colors.cardClasses.split(' ').forEach(c => card.classList.add(c));
+          itemWrapper.appendChild(card);
+          
+          agendaContainer.appendChild(itemWrapper);
       });
     }
     
@@ -525,23 +436,48 @@
     async function fetchData() {
       showLoadingSkeletons();
       try {
+        // This check is for local development vs. Google Apps Script environment
         if (typeof google === 'undefined' || !google.script || !google.script.run) {
-           throw new Error("This app must be run from its deployed Google Apps Script URL.");
+           console.warn("Running in local development mode. Using mock data.");
+           // Mock data for local testing when not on Google Apps Script
+           const mockResponse = [
+                { GradeLevel: '6th Grade', ClassName: 'Math 6', TeacherLastName: 'Newton', TurnIn: 'Unit 1 Review', Activities: 'Group work on fractions.', PracticeWork: '=HYPERLINK("https://example.com/math-hw", "Complete worksheet 2.3")', Upcoming: 'Quiz on Friday' },
+                { GradeLevel: '6th Grade', ClassName: 'Science 6', TeacherLastName: 'Curie', TurnIn: 'Lab Report', Activities: 'Cell observation under microscope.', PracticeWork: 'Read Chapter 4', Upcoming: 'Project due next week' },
+                { GradeLevel: '7th Grade', ClassName: 'English 7', TeacherLastName: 'Austen', TurnIn: 'Essay Draft', Activities: 'Peer review session.', PracticeWork: 'Finalize essay.', Upcoming: 'Book report on "The Giver"' },
+            ];
+           onSuccess(mockResponse);
+           return;
         }
-        new Promise((resolve, reject) => {
+        const response = await new Promise((resolve, reject) => {
             google.script.run
                 .withSuccessHandler(resolve)
                 .withFailureHandler(reject)
                 .getAgendaData();
-        }).then(onSuccess).catch(onFailure);
+        });
+
+        if (response && response.error) {
+          throw new Error(response.error);
+        }
+        
+        onSuccess(response);
+
       } catch (error) {
         onFailure(error);
       }
     }
 
-    function onSuccess(data) {
+    function onSuccess(response) {
       hideLoadingSkeletons();
-      console.log('Data received from server:', data);
+      
+      let data = [];
+      if (Array.isArray(response)) {
+        data = response;
+      } else if (response && Array.isArray(response.payload)) {
+        data = response.payload;
+      } else {
+        console.warn('Received data in an unexpected format:', response);
+      }
+
       allAgendaData = data;
       renderAllContent(currentGradeFilter);
     }
@@ -556,9 +492,8 @@
     // --- Print and PDF ---
 
     function printAgendas() {
-      // Ensure all rows are expanded for printing
-      document.querySelectorAll('.agenda-row:not(.expanded)').forEach(r => r.classList.add('expanded'));
-      setTimeout(() => window.print(), 100); // Allow time for DOM to update
+      document.querySelectorAll('.agenda-card').forEach(c => c.classList.add('expanded'));
+      setTimeout(() => window.print(), 200);
     }
 
     function populatePdfModal() {
@@ -576,7 +511,7 @@
             const item = document.createElement('div');
             item.className = 'flex items-center p-3 bg-white rounded-lg shadow-sm';
             item.innerHTML = `
-                <input type="checkbox" id="${checkboxId}" data-index="${index}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                <input type="checkbox" id="${checkboxId}" data-index="${index}" class="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked>
                 <label for="${checkboxId}" class="ml-3 text-sm font-medium text-gray-800">
                     <span class="font-bold">${agenda.ClassName}</span> (${agenda.TeacherLastName})
                 </label>
@@ -585,106 +520,85 @@
         });
     }
 
-    async function generatePdf() {
+    // --- PDF GENERATION FUNCTION ---
+    function generatePdf() {
         const { jsPDF } = window.jspdf;
         const selectedCheckboxes = document.querySelectorAll('#pdf-selection-container input[type="checkbox"]:checked');
         if (selectedCheckboxes.length === 0) {
-            alert('Please select at least one agenda item to include in the PDF.');
+            showMessage('Please select at least one agenda item.', 'error');
             return;
         }
 
-        const doc = new jsPDF({
-            orientation: 'portrait',
-            unit: 'in',
-            format: 'letter'
-        });
-
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'in', format: 'letter' });
         const today = new Date();
         const formattedDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-        // --- PDF Styling ---
-        const pageMargin = 0.75;
-        const contentWidth = doc.internal.pageSize.getWidth() - (pageMargin * 2);
+        const pageMargin = 0.5;
         let cursorY = pageMargin;
 
         // --- PDF Header ---
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(24);
-        doc.setTextColor('#1f2937');
-        doc.text('Daily Agenda', pageMargin, cursorY);
-
+        doc.setFontSize(18);
+        doc.text(`Daily Agenda - ${currentGradeFilter}`, pageMargin, cursorY);
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        doc.setTextColor('#6b7280');
+        doc.setFontSize(10);
         doc.text(formattedDate, doc.internal.pageSize.getWidth() - pageMargin, cursorY, { align: 'right' });
-
         cursorY += 0.2;
         doc.setDrawColor('#e5e7eb');
-        doc.setLineWidth(0.01);
         doc.line(pageMargin, cursorY, doc.internal.pageSize.getWidth() - pageMargin, cursorY);
-        cursorY += 0.4;
+        
+        // --- Data Preparation ---
+        const filteredData = allAgendaData.filter(item => item.GradeLevel === currentGradeFilter);
+        const selectedIndices = Array.from(selectedCheckboxes).map(cb => parseInt(cb.dataset.index, 10));
+        const pdfData = selectedIndices.map(i => filteredData[i]);
 
-        // --- PDF Body ---
-        for (let i = 0; i < selectedCheckboxes.length; i++) {
-            const checkbox = selectedCheckboxes[i];
-            const dataIndex = parseInt(checkbox.dataset.index, 10);
-            const filteredData = allAgendaData.filter(item => item.GradeLevel === currentGradeFilter);
-            const agenda = filteredData[dataIndex];
+        const processCellContent = (content) => {
+            if (!content) return 'N/A';
+            
+            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/i;
+            const match = content.match(hyperlinkRegex);
 
-            const sectionStartY = cursorY;
-
-            // Check for page break
-            // Simple check: estimate height and break if it overflows. A more robust solution
-            // would calculate the height of the text block more precisely.
-            const estimatedHeight = 1.5; // Rough estimate in inches
-            if (cursorY + estimatedHeight > doc.internal.pageSize.getHeight() - pageMargin) {
-                doc.addPage();
-                cursorY = pageMargin;
+            if (match) {
+                const url = match[1];
+                const text = match[2].replace(/""/g, '"').replace(/→|!/g, '• ');
+                return { text, url };
             }
+            
+            return content.replace(/→|!/g, '• ');
+        };
 
-            // Class & Teacher
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(16);
-            doc.setTextColor('#3b82f6'); // Blue-500
-            doc.text(agenda.ClassName, pageMargin, cursorY);
+        const tableData = pdfData.map(agenda => [
+            `${agenda.ClassName || 'N/A'}\n${agenda.TeacherLastName || 'N/A'}`,
+            processCellContent(agenda.TurnIn),
+            processCellContent(agenda.Activities),
+            processCellContent(agenda.PracticeWork),
+            processCellContent(agenda.Upcoming)
+        ]);
 
-            doc.setFont('helvetica', 'normal');
-            doc.setFontSize(11);
-            doc.setTextColor('#4b5563');
-            doc.text(`Teacher: ${agenda.TeacherLastName}`, doc.internal.pageSize.getWidth() - pageMargin, cursorY, { align: 'right' });
-            cursorY += 0.25;
+        // --- PDF Table Generation ---
+        doc.autoTable({
+            startY: cursorY + 0.2,
+            head: [['Class', 'Turn In', 'Activities', 'Practice', 'Upcoming']],
+            body: tableData,
+            theme: 'grid',
+            margin: { left: pageMargin },
+            headStyles: { fillColor: [59, 130, 246] },
+            styles: { fontSize: 9, cellPadding: 0.08, valign: 'top', lineColor: [209, 213, 219], lineWidth: 0.01 },
+            // *** THIS LINE WAS CORRECTED ***
+            columnStyles: { 0: { cellWidth: 1.5 }, 1: { cellWidth: 2 }, 2: { cellWidth: 2.2 }, 3: { cellWidth: 2 }, 4: { cellWidth: 2.2 } },
+            
+            didParseCell: (data) => {
+                if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
+                    data.cell.text = [data.cell.raw.text];
+                    data.cell.styles.textColor = '#0000FF';
+                }
+            },
 
-            // Agenda Details
-            const addSection = (title, text) => {
-                if (!text || text.toLowerCase() === 'n/a') return;
-                doc.setFont('helvetica', 'bold');
-                doc.setFontSize(10);
-                doc.setTextColor('#1f2937');
-                doc.text(title, pageMargin + 0.1, cursorY);
-                cursorY += 0.15;
-
-                doc.setFont('helvetica', 'normal');
-                doc.setFontSize(10);
-                doc.setTextColor('#374151');
-                const splitText = doc.splitTextToSize(text, contentWidth - 0.2);
-                doc.text(splitText, pageMargin + 0.2, cursorY);
-                cursorY += (splitText.length * 0.15) + 0.1;
-            };
-
-            addSection('Turn In:', agenda.TopBoxTextTurnin);
-            addSection('Daily Activities:', agenda.MiddleBoxTextDailyActivities);
-            addSection('Practice / Homework:', agenda.BottomBoxTextPracticeWork);
-            addSection('Upcoming:', agenda.UpcomingText);
-
-            // Add a separator line
-            cursorY += 0.1;
-            if (i < selectedCheckboxes.length - 1) {
-                doc.setDrawColor('#d1d5db');
-                doc.setLineWidth(0.01);
-                doc.line(pageMargin, cursorY, doc.internal.pageSize.getWidth() - pageMargin, cursorY);
-                cursorY += 0.25;
+            didDrawCell: (data) => {
+                if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
+                    doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: data.cell.raw.url });
+                }
             }
-        }
+        });
 
         doc.save(`Daily_Agenda_${currentGradeFilter.replace(' ', '_')}_${today.toISOString().slice(0,10)}.pdf`);
     }
@@ -692,16 +606,16 @@
 
     // --- Initialization & Event Listeners ---
     document.addEventListener('DOMContentLoaded', () => {
-      // Initial Setup
       const today = new Date();
       const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
       currentDateDisplay.textContent = today.toLocaleDateString('en-US', options);
 
       const initialButton = document.querySelector(`.grade-button[data-grade="${currentGradeFilter}"]`);
-      initialButton.classList.add('active');
-      updateActiveGradePill(initialButton);
+      if (initialButton) {
+        initialButton.classList.add('active');
+        updateActiveGradePill(initialButton);
+      }
 
-      // Attach all event listeners after the DOM is fully loaded
       gradeButtons.forEach(button => {
         button.addEventListener('click', () => {
           currentGradeFilter = button.dataset.grade;
@@ -731,11 +645,15 @@
           pdfModal.classList.remove('hidden');
       });
 
-      closeModalButton.addEventListener('click', () => pdfModal.classList.add('hidden'));
-      cancelPdfButton.addEventListener('click', () => pdfModal.classList.add('hidden'));
-      generatePdfButton.addEventListener('click', generatePdf);
+      const closeTheModal = () => pdfModal.classList.add('hidden');
+      closeModalButton.addEventListener('click', closeTheModal);
+      cancelPdfButton.addEventListener('click', closeTheModal);
+      
+      generatePdfButton.addEventListener('click', () => {
+          generatePdf();
+          closeTheModal();
+      });
 
-      // Initial Data Fetch
       fetchData();
     });
   </script>
