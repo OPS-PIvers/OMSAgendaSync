@@ -80,13 +80,14 @@ function extractTextForCurrentDayAgenda(dayToTest) {
     return;
   }
 
+  const today = new Date();
+  archiveCurrentDayData(today);
+  
   dataSheet.clearContents();
   dataSheet.appendRow([
     'Teacher Last Name', 'Class Name', 'Day of Week', 'Turn In', 'Activities',
     'Practice Work', 'Upcoming', 'Grade Level'
   ]);
-
-  const today = new Date();
   const dayOfWeek = dayToTest || Utilities.formatDate(today, Session.getScriptTimeZone(), 'EEEE');
   Logger.log(`Running extraction for: ${dayOfWeek}`);
 
@@ -209,6 +210,189 @@ function testForThursday() { extractTextForCurrentDayAgenda('Thursday'); }
 function testForFriday() { extractTextForCurrentDayAgenda('Friday'); }
 // --- END NEW TESTING FUNCTIONS ---
 
+
+/**
+ * Gets or creates an archive sheet for the specified date.
+ * Archive sheets are organized by month (e.g., "Archive_2024_01").
+ * @param {Date} date The date for which to get/create the archive sheet
+ * @returns {GoogleAppsScript.Spreadsheet.Sheet} The archive sheet
+ */
+function getOrCreateArchiveSheet(date) {
+  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+  const ARCHIVE_SHEET_PREFIX = CONSTANTS.ARCHIVE_SHEET_PREFIX;
+  
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const archiveSheetName = `${ARCHIVE_SHEET_PREFIX}${year}_${month}`;
+  
+  let archiveSheet = spreadsheet.getSheetByName(archiveSheetName);
+  
+  if (!archiveSheet) {
+    archiveSheet = spreadsheet.insertSheet(archiveSheetName);
+    
+    archiveSheet.appendRow([
+      'Date', 'Teacher Last Name', 'Class Name', 'Day of Week', 'Turn In', 
+      'Activities', 'Practice Work', 'Upcoming', 'Grade Level'
+    ]);
+    
+    const headerRange = archiveSheet.getRange(1, 1, 1, 9);
+    headerRange.setFontWeight('bold');
+    headerRange.setBackground('#f0f0f0');
+    
+    Logger.log(`Created new archive sheet: ${archiveSheetName}`);
+  }
+  
+  return archiveSheet;
+}
+
+/**
+ * Archives current day data by moving it to the appropriate monthly archive sheet.
+ * This function should be called before clearing the current day sheet.
+ * @param {Date} date The date of the data being archived
+ */
+function archiveCurrentDayData(date) {
+  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+  const DATA_SHEET_NAME = CONSTANTS.DATA_SHEET_NAME;
+  
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const dataSheet = spreadsheet.getSheetByName(DATA_SHEET_NAME);
+    
+    if (!dataSheet) {
+      Logger.log(`Warning: Data sheet '${DATA_SHEET_NAME}' not found for archiving.`);
+      return;
+    }
+    
+    const dataRange = dataSheet.getDataRange();
+    const values = dataRange.getValues();
+    const formulas = dataRange.getFormulas();
+    
+    if (values.length <= 1) {
+      Logger.log('No data to archive (only headers present).');
+      return;
+    }
+    
+    const archiveSheet = getOrCreateArchiveSheet(date);
+    const dateString = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    
+    for (let i = 1; i < values.length; i++) {
+      const rowValues = values[i];
+      const rowFormulas = formulas[i];
+      
+      const archiveRow = [dateString];
+      
+      for (let j = 0; j < rowValues.length; j++) {
+        if (rowFormulas[j]) {
+          archiveRow.push(rowFormulas[j]);
+        } else {
+          archiveRow.push(rowValues[j]);
+        }
+      }
+      
+      archiveSheet.appendRow(archiveRow);
+    }
+    
+    Logger.log(`Archived ${values.length - 1} rows to archive sheet for ${dateString}`);
+    
+  } catch (e) {
+    Logger.log(`Error archiving data: ${e.message}`);
+  }
+}
+
+/**
+ * Retrieves archived agenda data for a specific date.
+ * @param {string} dateString The date in 'YYYY-MM-DD' format
+ * @returns {Object} An object containing the archived data or error
+ */
+function getArchivedDataForDate(dateString) {
+  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+  const ARCHIVE_SHEET_PREFIX = CONSTANTS.ARCHIVE_SHEET_PREFIX;
+  
+  try {
+    const date = new Date(dateString);
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const archiveSheetName = `${ARCHIVE_SHEET_PREFIX}${year}_${month}`;
+    
+    const archiveSheet = spreadsheet.getSheetByName(archiveSheetName);
+    if (!archiveSheet) {
+      return { payload: [] };
+    }
+    
+    const range = archiveSheet.getDataRange();
+    const values = range.getValues();
+    const formulas = range.getFormulas();
+    
+    if (values.length <= 1) {
+      return { payload: [] };
+    }
+    
+    const headers = values[0];
+    const data = [];
+    
+    for (let i = 1; i < values.length; i++) {
+      const currentRowValues = values[i];
+      const currentRowFormulas = formulas[i];
+      
+      if (currentRowValues[0] === dateString) {
+        const obj = {};
+        
+        for (let j = 1; j < headers.length; j++) {
+          const cleanedHeader = headers[j].replace(/[^a-zA-Z0-9]/g, '');
+          if (currentRowFormulas[j]) {
+            obj[cleanedHeader] = currentRowFormulas[j];
+          } else {
+            obj[cleanedHeader] = currentRowValues[j];
+          }
+        }
+        data.push(obj);
+      }
+    }
+    
+    return { payload: data };
+    
+  } catch (e) {
+    Logger.log(`Error retrieving archived data for ${dateString}: ${e.message}`);
+    return { error: `Failed to fetch archived data: ${e.message}` };
+  }
+}
+
+/**
+ * Gets a list of all available archive dates.
+ * @returns {Array<string>} Array of date strings in 'YYYY-MM-DD' format
+ */
+function getAvailableArchiveDates() {
+  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+  const ARCHIVE_SHEET_PREFIX = CONSTANTS.ARCHIVE_SHEET_PREFIX;
+  
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheets = spreadsheet.getSheets();
+    const dates = new Set();
+    
+    sheets.forEach(sheet => {
+      const sheetName = sheet.getName();
+      if (sheetName.startsWith(ARCHIVE_SHEET_PREFIX)) {
+        const range = sheet.getDataRange();
+        const values = range.getValues();
+        
+        for (let i = 1; i < values.length; i++) {
+          if (values[i][0]) {
+            dates.add(values[i][0]);
+          }
+        }
+      }
+    });
+    
+    return Array.from(dates).sort();
+    
+  } catch (e) {
+    Logger.log(`Error getting available archive dates: ${e.message}`);
+    return [];
+  }
+}
 
 /**
  * Creates a custom menu in the Google Sheet UI for manual script execution.

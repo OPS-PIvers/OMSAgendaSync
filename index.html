@@ -198,8 +198,18 @@
   <div class="container mx-auto px-4 py-8">
     <!-- Header -->
     <header class="text-center mb-8 no-print">
-      <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 tracking-tight mb-2">Daily Snapshot</h1>
-      <p id="current-date" class="text-lg text-gray-500"></p>
+      <div class="flex items-center justify-center gap-4 mb-4">
+        <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 tracking-tight">Daily Snapshot</h1>
+        <button id="archive-button" class="text-gray-600 hover:text-gray-800 transition-colors" aria-label="View Past Agendas" title="View Past Agendas">
+          <i class="fas fa-calendar-alt text-2xl"></i>
+        </button>
+      </div>
+      <div class="flex items-center justify-center gap-2">
+        <p id="current-date" class="text-lg text-gray-500"></p>
+        <button id="back-to-today" class="hidden px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors">
+          Back to Today
+        </button>
+      </div>
     </header>
 
     <!-- Grade Level Navigation -->
@@ -257,11 +267,35 @@
       </div>
     </div>
   </div>
+
+  <!-- Archive Date Selection Modal -->
+  <div id="archive-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-2000 hidden">
+    <div class="bg-white rounded-lg shadow-2xl p-8 max-w-md w-full transform transition-all">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">Select Archive Date</h2>
+        <button id="close-archive-modal-button" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
+      </div>
+      <p class="text-gray-600 mb-6">Choose a date to view past agenda data:</p>
+      <div class="mb-6">
+        <label for="archive-date-input" class="block text-sm font-medium text-gray-700 mb-2">Date:</label>
+        <input type="date" id="archive-date-input" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+      </div>
+      <div class="flex justify-end gap-4">
+        <button id="cancel-archive-button" class="px-6 py-2 rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Cancel</button>
+        <button id="view-archive-button" class="px-6 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-2">
+          <i class="fas fa-calendar-check"></i>
+          View Archive
+        </button>
+      </div>
+    </div>
+  </div>
   
   <script>
     // --- Global State & DOM Elements ---
     let allAgendaData = [];
     let currentGradeFilter = '6th Grade';
+    let isViewingArchive = false;
+    let currentArchiveDate = null;
 
     const agendaContainer = document.getElementById('agenda-container');
     const loadingContainer = document.getElementById('loading-container');
@@ -273,6 +307,8 @@
     const fabContainer = document.getElementById('fab-container');
     const printButton = document.getElementById('print-button');
     const pdfButton = document.getElementById('pdf-button');
+    const archiveButton = document.getElementById('archive-button');
+    const backToTodayButton = document.getElementById('back-to-today');
 
     // --- UI Update Functions ---
 
@@ -433,7 +469,7 @@
     
     // --- Data Fetching ---
 
-    async function fetchData() {
+    async function fetchData(archiveDate = null) {
       showLoadingSkeletons();
       try {
         // This check is for local development vs. Google Apps Script environment
@@ -448,12 +484,23 @@
            onSuccess(mockResponse);
            return;
         }
-        const response = await new Promise((resolve, reject) => {
+        
+        let response;
+        if (archiveDate) {
+          response = await new Promise((resolve, reject) => {
             google.script.run
-                .withSuccessHandler(resolve)
-                .withFailureHandler(reject)
-                .getAgendaData();
-        });
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getArchivedDataForDate(archiveDate);
+          });
+        } else {
+          response = await new Promise((resolve, reject) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler(reject)
+              .getAgendaData();
+          });
+        }
 
         if (response && response.error) {
           throw new Error(response.error);
@@ -479,6 +526,7 @@
       }
 
       allAgendaData = data;
+      updateDateDisplay();
       renderAllContent(currentGradeFilter);
     }
 
@@ -487,6 +535,34 @@
       showMessage(`Error: ${error.message || 'Could not load agendas.'}. Please refresh.`, 'error');
       console.error('Data fetch error:', error);
       fabContainer.classList.add('hidden');
+    }
+
+    // --- Date Management ---
+    
+    function updateDateDisplay() {
+      if (isViewingArchive && currentArchiveDate) {
+        const archiveDate = new Date(currentArchiveDate);
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        currentDateDisplay.textContent = `Archive: ${archiveDate.toLocaleDateString('en-US', options)}`;
+        backToTodayButton.classList.remove('hidden');
+      } else {
+        const today = new Date();
+        const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+        currentDateDisplay.textContent = today.toLocaleDateString('en-US', options);
+        backToTodayButton.classList.add('hidden');
+      }
+    }
+    
+    function viewArchiveDate(dateString) {
+      isViewingArchive = true;
+      currentArchiveDate = dateString;
+      fetchData(dateString);
+    }
+    
+    function backToToday() {
+      isViewingArchive = false;
+      currentArchiveDate = null;
+      fetchData();
     }
 
     // --- Print and PDF ---
@@ -606,9 +682,7 @@
 
     // --- Initialization & Event Listeners ---
     document.addEventListener('DOMContentLoaded', () => {
-      const today = new Date();
-      const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-      currentDateDisplay.textContent = today.toLocaleDateString('en-US', options);
+      updateDateDisplay();
 
       const initialButton = document.querySelector(`.grade-button[data-grade="${currentGradeFilter}"]`);
       if (initialButton) {
@@ -653,6 +727,33 @@
           generatePdf();
           closeTheModal();
       });
+      
+      // Archive functionality
+      const archiveModal = document.getElementById('archive-modal');
+      const closeArchiveModalButton = document.getElementById('close-archive-modal-button');
+      const cancelArchiveButton = document.getElementById('cancel-archive-button');
+      const viewArchiveButton = document.getElementById('view-archive-button');
+      const archiveDateInput = document.getElementById('archive-date-input');
+
+      archiveButton.addEventListener('click', () => {
+        archiveModal.classList.remove('hidden');
+      });
+
+      const closeArchiveModal = () => archiveModal.classList.add('hidden');
+      closeArchiveModalButton.addEventListener('click', closeArchiveModal);
+      cancelArchiveButton.addEventListener('click', closeArchiveModal);
+      
+      viewArchiveButton.addEventListener('click', () => {
+        const selectedDate = archiveDateInput.value;
+        if (selectedDate) {
+          viewArchiveDate(selectedDate);
+          closeArchiveModal();
+        } else {
+          showMessage('Please select a date.', 'error');
+        }
+      });
+      
+      backToTodayButton.addEventListener('click', backToToday);
 
       fetchData();
     });

@@ -24,6 +24,13 @@ const CONSTANTS = {
   DATA_SHEET_NAME: 'Current_Day_Agendas',
 
   /**
+   * The prefix used for archive sheet names. Archive sheets are named with this prefix
+   * followed by year and month (e.g., 'Archive_2024_01').
+   * @type {string}
+   */
+  ARCHIVE_SHEET_PREFIX: 'Archive_',
+
+  /**
    * A tolerance value (in points) for matching the position and size of shapes on the slides.
    * This helps account for minor variations in shape placement.
    * @type {number}
