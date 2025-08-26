@@ -525,6 +525,9 @@
         console.warn('Received data in an unexpected format:', response);
       }
 
+      console.log(`Archive data loaded: ${data.length} records for date: ${currentArchiveDate}`);
+      console.log('Data preview:', data.slice(0, 2)); // Log first 2 records for debugging
+
       allAgendaData = data;
       updateDateDisplay();
       renderAllContent(currentGradeFilter);
@@ -541,7 +544,8 @@
     
     function updateDateDisplay() {
       if (isViewingArchive && currentArchiveDate) {
-        const archiveDate = new Date(currentArchiveDate);
+        // Fix timezone issue by forcing local timezone interpretation
+        const archiveDate = new Date(currentArchiveDate + "T00:00:00");
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         currentDateDisplay.textContent = `Archive: ${archiveDate.toLocaleDateString('en-US', options)}`;
         backToTodayButton.classList.remove('hidden');
@@ -554,8 +558,10 @@
     }
     
     function viewArchiveDate(dateString) {
+      console.log(`viewArchiveDate called with: ${dateString}`);
       isViewingArchive = true;
       currentArchiveDate = dateString;
+      console.log(`Fetching archive data for: ${dateString}`);
       fetchData(dateString);
     }
     
@@ -745,7 +751,9 @@
       
       viewArchiveButton.addEventListener('click', () => {
         const selectedDate = archiveDateInput.value;
+        console.log(`Date picker selected: ${selectedDate}`);
         if (selectedDate) {
+          console.log(`Date format validation: ${selectedDate} matches YYYY-MM-DD format`);
           viewArchiveDate(selectedDate);
           closeArchiveModal();
         } else {
