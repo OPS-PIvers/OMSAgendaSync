@@ -38,6 +38,32 @@ const CONSTANTS = {
   TOLERANCE: 5,
 
   /**
+   * The name of the sheet that contains the staff directory with columns:
+   * A: First Name, B: Last Name, C: Email Address, D: Agenda URL, E: Slide ID
+   * @type {string}
+   */
+  STAFF_DIRECTORY_SHEET_NAME: 'Staff Directory',
+
+  /**
+   * The Google Slides presentation ID that will be copied for each teacher.
+   * This should be set to the master template presentation ID.
+   * @type {string}
+   */
+  MASTER_PRESENTATION_ID: '1QO9b7830WZmmWgPB5ZWm1-QkI5bvqqj6i_pUo85EFkw',
+
+  /**
+   * Column indices for the Staff Directory sheet (0-based indexing)
+   * @type {Object}
+   */
+  STAFF_DIRECTORY_COLUMNS: {
+    FIRST_NAME: 0,    // Column A
+    LAST_NAME: 1,     // Column B
+    EMAIL: 2,         // Column C
+    AGENDA_URL: 3,    // Column D
+    SLIDE_ID: 4       // Column E
+  },
+
+  /**
    * An object containing the precise coordinates and dimensions (x, y, width, height)
    * for the text boxes to be extracted from the Google Slides.
    * The coordinates are organized by the day of the week.
@@ -45,29 +71,29 @@ const CONSTANTS = {
    */
   BOX_COORDINATES: {
     'Monday': {
-      top: { x: 43.50, y: 129.64, width: 153.17, height: 33.87 },    // "Turn In"
-      middle: { x: 43.50, y: 198.31, width: 153.17, height: 101.06 }, // "Activities"
-      bottom: { x: 42.71, y: 334.90, width: 153.17, height: 45.14 }  // "Practice Work"
+      top: { x: 43.50, y: 124.70, width: 153.17, height: 38.69 },    // "Turn In"
+      middle: { x: 43.50, y: 194.49, width: 153.17, height: 104.88 }, // "Activities"
+      bottom: { x: 42.71, y: 329.03, width: 153.17, height: 51.02 }  // "Practice Work"
     },
     'Tuesday': {
-      top: { x: 212.61, y: 129.64, width: 157.58, height: 33.87 },   // "Turn In"
-      middle: { x: 212.61, y: 198.31, width: 157.58, height: 101.06 },// "Activities"
-      bottom: { x: 211.82, y: 334.90, width: 157.58, height: 45.14 } // "Practice Work"
+      top: { x: 212.61, y: 124.70, width: 157.58, height: 38.69 },   // "Turn In"
+      middle: { x: 212.61, y: 194.49, width: 157.58, height: 104.88 },// "Activities"
+      bottom: { x: 211.82, y: 329.03, width: 157.58, height: 51.02 } // "Practice Work"
     },
     'Wednesday': {
-      top: { x: 383.29, y: 129.64, width: 157.58, height: 33.87 },   // "Turn In"
-      middle: { x: 383.29, y: 198.31, width: 157.58, height: 101.06 },// "Activities"
-      bottom: { x: 382.50, y: 334.90, width: 157.58, height: 45.14 } // "Practice Work"
+      top: { x: 383.29, y: 124.70, width: 157.58, height: 38.69 },   // "Turn In"
+      middle: { x: 383.29, y: 194.49, width: 157.58, height: 104.88 },// "Activities"
+      bottom: { x: 382.50, y: 329.03, width: 157.58, height: 51.02 } // "Practice Work"
     },
     'Thursday': {
-      top: { x: 553.98, y: 129.64, width: 157.58, height: 34.72 },   // "Turn In"
-      middle: { x: 553.98, y: 198.31, width: 157.58, height: 101.06 },// "Activities"
-      bottom: { x: 553.19, y: 334.90, width: 157.58, height: 45.14 } // "Practice Work"
+      top: { x: 553.98, y: 124.70, width: 157.58, height: 39.66 },   // "Turn In"
+      middle: { x: 553.98, y: 194.49, width: 157.58, height: 104.88 },// "Activities"
+      bottom: { x: 553.19, y: 329.03, width: 157.58, height: 51.02 } // "Practice Work"
     },
     'Friday': {
-      top: { x: 727.50, y: 129.64, width: 161.06, height: 34.72 },   // "Turn In"
-      middle: { x: 727.50, y: 198.31, width: 161.06, height: 101.06 },// "Activities"
-      bottom: { x: 726.71, y: 334.90, width: 161.06, height: 45.14 } // "Practice Work"
+      top: { x: 727.50, y: 124.70, width: 161.06, height: 39.66 },   // "Turn In"
+      middle: { x: 727.50, y: 194.49, width: 161.06, height: 104.88 },// "Activities"
+      bottom: { x: 726.71, y: 329.03, width: 161.06, height: 51.02 } // "Practice Work"
     },
     'Upcoming': { x: 148.66, y: 392.40, width: 709.13, height: 31.23 }
   }

@@ -157,11 +157,23 @@ function extractTextForCurrentDayAgenda(dayToTest) {
       let topBoxText = 'N/A', midBoxText = 'N/A', botBoxText = 'N/A', upcomingText = 'N/A';
       const tolerance = CONSTANTS.TOLERANCE;
 
-      const matchesBox = (shape, targetBox) => {
-        return Math.abs(shape.getLeft() - targetBox.x) < tolerance &&
-               Math.abs(shape.getTop() - targetBox.y) < tolerance &&
-               Math.abs(shape.getWidth() - targetBox.width) < tolerance &&
-               Math.abs(shape.getHeight() - targetBox.height) < tolerance;
+      const matchesBox = (shape, targetBox, boxType = '') => {
+        const xDiff = Math.abs(shape.getLeft() - targetBox.x);
+        const yDiff = Math.abs(shape.getTop() - targetBox.y);
+        const wDiff = Math.abs(shape.getWidth() - targetBox.width);
+        const hDiff = Math.abs(shape.getHeight() - targetBox.height);
+        const matches = xDiff < tolerance && yDiff < tolerance && wDiff < tolerance && hDiff < tolerance;
+        
+        // Debug logging for Tuesday practice work specifically
+        if (dayOfWeek === 'Tuesday' && boxType === 'bottom') {
+          Logger.log(`=== TUESDAY PRACTICE WORK DEBUG ===`);
+          Logger.log(`Shape: (${shape.getLeft()}, ${shape.getTop()}) ${shape.getWidth()}x${shape.getHeight()}`);
+          Logger.log(`Target: (${targetBox.x}, ${targetBox.y}) ${targetBox.width}x${targetBox.height}`);
+          Logger.log(`Differences: X=${xDiff}, Y=${yDiff}, W=${wDiff}, H=${hDiff} (tolerance=${tolerance})`);
+          Logger.log(`Matches: ${matches}`);
+        }
+        
+        return matches;
       };
 
       pageElements.forEach(element => {
@@ -171,13 +183,31 @@ function extractTextForCurrentDayAgenda(dayToTest) {
           if (textRange.isEmpty()) return;
 
           const cellValue = extractTextAndFirstLink(textRange);
+          const shapeText = textRange.asString().trim();
 
-          if (matchesBox(shape, currentDayBoxes.top)) topBoxText = cellValue;
-          else if (matchesBox(shape, currentDayBoxes.middle)) midBoxText = cellValue;
-          else if (matchesBox(shape, currentDayBoxes.bottom)) botBoxText = cellValue;
-          else if (matchesBox(shape, upcomingBox)) upcomingText = cellValue;
+          // Debug logging for Tuesday shapes with content
+          if (dayOfWeek === 'Tuesday' && shapeText !== '' && shapeText !== '...') {
+            Logger.log(`=== TUESDAY SHAPE WITH CONTENT ===`);
+            Logger.log(`Text: "${shapeText}"`);
+            Logger.log(`Position: (${shape.getLeft()}, ${shape.getTop()})`);
+            Logger.log(`Size: ${shape.getWidth()}x${shape.getHeight()}`);
+          }
+
+          if (matchesBox(shape, currentDayBoxes.top, 'top')) topBoxText = cellValue;
+          else if (matchesBox(shape, currentDayBoxes.middle, 'middle')) midBoxText = cellValue;
+          else if (matchesBox(shape, currentDayBoxes.bottom, 'bottom')) botBoxText = cellValue;
+          else if (matchesBox(shape, upcomingBox, 'upcoming')) upcomingText = cellValue;
         }
       });
+
+      // Debug logging for Tuesday final results
+      if (dayOfWeek === 'Tuesday') {
+        Logger.log(`=== TUESDAY FINAL RESULTS ===`);
+        Logger.log(`Turn In (top): "${topBoxText}"`);
+        Logger.log(`Activities (middle): "${midBoxText}"`);
+        Logger.log(`Practice Work (bottom): "${botBoxText}"`);
+        Logger.log(`Upcoming: "${upcomingText}"`);
+      }
 
       dataSheet.appendRow([
         teacherLastName.trim(), className.trim(), dayOfWeek, topBoxText, midBoxText,
@@ -395,6 +425,207 @@ function getAvailableArchiveDates() {
 }
 
 /**
+ * Creates copies of the master presentation for selected staff members.
+ * Reads selected rows from the Staff Directory sheet and creates personalized copies.
+ */
+function createCopiesForSelectedRows() {
+  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+  const STAFF_DIRECTORY_SHEET_NAME = CONSTANTS.STAFF_DIRECTORY_SHEET_NAME;
+  const MASTER_PRESENTATION_ID = CONSTANTS.MASTER_PRESENTATION_ID;
+  const COLUMNS = CONSTANTS.STAFF_DIRECTORY_COLUMNS;
+
+  Logger.log('Starting createCopiesForSelectedRows function');
+
+  if (MASTER_PRESENTATION_ID === 'REPLACE_WITH_MASTER_PRESENTATION_ID') {
+    SpreadsheetApp.getUi().alert('Error: Master Presentation ID not configured. Please update MASTER_PRESENTATION_ID in Constants.js');
+    return;
+  }
+
+  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const staffSheet = spreadsheet.getSheetByName(STAFF_DIRECTORY_SHEET_NAME);
+  
+  if (!staffSheet) {
+    SpreadsheetApp.getUi().alert(`Error: Staff Directory sheet '${STAFF_DIRECTORY_SHEET_NAME}' not found.`);
+    return;
+  }
+
+  // Better selection handling - try multiple methods
+  let selectedRange = null;
+  try {
+    // First try to get selection from the active sheet
+    const activeSheet = SpreadsheetApp.getActiveSheet();
+    if (activeSheet && activeSheet.getName() === STAFF_DIRECTORY_SHEET_NAME) {
+      selectedRange = activeSheet.getActiveRange();
+      Logger.log(`Got selection from active sheet: ${selectedRange.getA1Notation()}`);
+    } else {
+      // Fall back to getting selection from the staff sheet
+      const selection = staffSheet.getSelection();
+      if (selection && selection.getActiveRange()) {
+        selectedRange = selection.getActiveRange();
+        Logger.log(`Got selection from staff sheet: ${selectedRange.getA1Notation()}`);
+      }
+    }
+  } catch (e) {
+    Logger.log(`Error getting selection: ${e.message}`);
+  }
+  
+  if (!selectedRange) {
+    SpreadsheetApp.getUi().alert('Please select one or more rows in the Staff Directory sheet to create copies for. Make sure you are on the Staff Directory sheet when running this function.');
+    return;
+  }
+
+  Logger.log(`Processing selection: ${selectedRange.getA1Notation()}, rows ${selectedRange.getRow()} to ${selectedRange.getLastRow()}`);
+
+  let processedCount = 0;
+  let errorCount = 0;
+  const errors = [];
+
+  // Process each row in the selected range
+  for (let row = selectedRange.getRow(); row <= selectedRange.getLastRow(); row++) {
+    if (row === 1) {
+      Logger.log(`Skipping header row ${row}`);
+      continue; // Skip header row
+    }
+    
+    Logger.log(`Processing row ${row}`);
+    const rowData = staffSheet.getRange(row, 1, 1, 5).getValues()[0];
+    Logger.log(`Raw row data: ${JSON.stringify(rowData)}`);
+    
+    // Trim whitespace and validate
+    const firstName = rowData[COLUMNS.FIRST_NAME] ? String(rowData[COLUMNS.FIRST_NAME]).trim() : '';
+    const lastName = rowData[COLUMNS.LAST_NAME] ? String(rowData[COLUMNS.LAST_NAME]).trim() : '';
+    const email = rowData[COLUMNS.EMAIL] ? String(rowData[COLUMNS.EMAIL]).trim() : '';
+    const existingUrl = rowData[COLUMNS.AGENDA_URL] ? String(rowData[COLUMNS.AGENDA_URL]).trim() : '';
+    const existingId = rowData[COLUMNS.SLIDE_ID] ? String(rowData[COLUMNS.SLIDE_ID]).trim() : '';
+
+    Logger.log(`Processed data - First: "${firstName}", Last: "${lastName}", Email: "${email}"`);
+
+    if (!firstName || !lastName || !email) {
+      const errorMsg = `Row ${row}: Missing required information - First: "${firstName}", Last: "${lastName}", Email: "${email}"`;
+      Logger.log(errorMsg);
+      errors.push(errorMsg);
+      errorCount++;
+      continue;
+    }
+
+    if (existingUrl && existingId) {
+      Logger.log(`${firstName} ${lastName} already has a copy, asking user for confirmation`);
+      const response = SpreadsheetApp.getUi().alert(
+        `${firstName} ${lastName} already has a copy`,
+        `${firstName} ${lastName} already has an agenda copy. Do you want to create a new one?`,
+        SpreadsheetApp.getUi().ButtonSet.YES_NO
+      );
+      if (response !== SpreadsheetApp.getUi().Button.YES) {
+        Logger.log(`User chose not to recreate copy for ${firstName} ${lastName}`);
+        continue;
+      }
+    }
+
+    try {
+      Logger.log(`Creating copy for ${firstName} ${lastName} (${email})`);
+      const result = createPersonalizedCopyForTeacher(firstName, lastName, email);
+      if (result.success) {
+        updateStaffDirectoryRow(staffSheet, row, result.presentationUrl, result.presentationId);
+        processedCount++;
+        Logger.log(`Successfully created copy for ${firstName} ${lastName}: ${result.presentationUrl}`);
+      } else {
+        const errorMsg = `${firstName} ${lastName}: ${result.error}`;
+        Logger.log(`Failed to create copy: ${errorMsg}`);
+        errors.push(errorMsg);
+        errorCount++;
+      }
+    } catch (e) {
+      const errorMsg = `${firstName} ${lastName}: ${e.message}`;
+      Logger.log(`Exception creating copy: ${errorMsg}`);
+      errors.push(errorMsg);
+      errorCount++;
+    }
+  }
+
+  let message = `Operation completed!\nCopies created: ${processedCount}`;
+  if (errorCount > 0) {
+    message += `\nErrors: ${errorCount}`;
+    if (errors.length > 0) {
+      message += `\n\nError details:\n${errors.join('\n')}`;
+    }
+  }
+  
+  Logger.log(`Final result: ${message}`);
+  SpreadsheetApp.getUi().alert('Staff Directory Copy Creation', message, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Creates a personalized copy of the master presentation for a specific teacher.
+ * @param {string} firstName Teacher's first name
+ * @param {string} lastName Teacher's last name  
+ * @param {string} email Teacher's email address
+ * @returns {Object} Result object with success status and details
+ */
+function createPersonalizedCopyForTeacher(firstName, lastName, email) {
+  const MASTER_PRESENTATION_ID = CONSTANTS.MASTER_PRESENTATION_ID;
+  
+  try {
+    // Use DriveApp to copy the file (correct method for Google Apps Script)
+    const copyName = `${lastName} - OMS Agenda 25-26`;
+    
+    Logger.log(`Creating copy using DriveApp: ${copyName}`);
+    const masterFile = DriveApp.getFileById(MASTER_PRESENTATION_ID);
+    const copiedFile = masterFile.makeCopy(copyName);
+    const presentationId = copiedFile.getId();
+    const presentationUrl = `https://docs.google.com/presentation/d/${presentationId}/edit`;
+    
+    Logger.log(`Copy created with ID: ${presentationId}`);
+    
+    // Open the copied presentation using SlidesApp for text replacement
+    try {
+      const copiedPresentation = SlidesApp.openById(presentationId);
+      
+      // Replace [TEACHER NAME] with teacher's last name in all caps
+      const replacementCount = copiedPresentation.replaceAllText('[TEACHER NAME]', lastName.toUpperCase());
+      Logger.log(`Replaced ${replacementCount} instances of [TEACHER NAME] with ${lastName.toUpperCase()}`);
+    } catch (e) {
+      Logger.log(`Warning: Could not replace text in presentation: ${e.message}`);
+    }
+    
+    // Share with teacher as editor using the Drive file
+    try {
+      copiedFile.addEditor(email);
+      Logger.log(`Shared presentation with ${email} as editor`);
+    } catch (e) {
+      Logger.log(`Warning: Could not share with ${email}: ${e.message}`);
+    }
+    
+    return {
+      success: true,
+      presentationId: presentationId,
+      presentationUrl: presentationUrl,
+      copyName: copyName
+    };
+    
+  } catch (e) {
+    Logger.log(`Error in createPersonalizedCopyForTeacher: ${e.message}`);
+    return {
+      success: false,
+      error: e.message
+    };
+  }
+}
+
+/**
+ * Updates a row in the Staff Directory sheet with presentation URL and ID.
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet The Staff Directory sheet
+ * @param {number} row The row number to update
+ * @param {string} presentationUrl The URL of the created presentation
+ * @param {string} presentationId The ID of the created presentation
+ */
+function updateStaffDirectoryRow(sheet, row, presentationUrl, presentationId) {
+  const COLUMNS = CONSTANTS.STAFF_DIRECTORY_COLUMNS;
+  
+  sheet.getRange(row, COLUMNS.AGENDA_URL + 1).setValue(presentationUrl);
+  sheet.getRange(row, COLUMNS.SLIDE_ID + 1).setValue(presentationId);
+}
+
+/**
  * Creates a custom menu in the Google Sheet UI for manual script execution.
  */
 function onOpen() {
@@ -409,9 +640,99 @@ function onOpen() {
     .addItem('Thursday', 'testForThursday')
     .addItem('Friday', 'testForFriday');
 
+  const staffSubMenu = ui.createMenu('Staff Directory')
+    .addItem('Create Copies for Selected Staff', 'createCopiesForSelectedRows')
+    .addItem('Debug Staff Directory Selection', 'debugStaffDirectorySelection');
+
   menu.addSeparator()
       .addSubMenu(testSubMenu)
+      .addSeparator()
+      .addSubMenu(staffSubMenu)
       .addToUi();
+}
+
+/**
+ * Debug function to test Staff Directory selection and data reading.
+ * This helps troubleshoot issues with the copy creation function.
+ */
+function debugStaffDirectorySelection() {
+  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+  const STAFF_DIRECTORY_SHEET_NAME = CONSTANTS.STAFF_DIRECTORY_SHEET_NAME;
+  const MASTER_PRESENTATION_ID = CONSTANTS.MASTER_PRESENTATION_ID;
+  const COLUMNS = CONSTANTS.STAFF_DIRECTORY_COLUMNS;
+
+  Logger.log('=== DEBUG: Starting Staff Directory Selection Debug ===');
+
+  // Test spreadsheet and sheet access
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    Logger.log(`✓ Successfully opened spreadsheet: ${spreadsheet.getName()}`);
+    
+    const staffSheet = spreadsheet.getSheetByName(STAFF_DIRECTORY_SHEET_NAME);
+    if (!staffSheet) {
+      const message = `✗ Staff Directory sheet '${STAFF_DIRECTORY_SHEET_NAME}' not found.`;
+      Logger.log(message);
+      SpreadsheetApp.getUi().alert('Debug Result', message, SpreadsheetApp.getUi().ButtonSet.OK);
+      return;
+    }
+    Logger.log(`✓ Successfully found Staff Directory sheet`);
+
+    // Test master presentation access
+    try {
+      const masterPresentation = SlidesApp.openById(MASTER_PRESENTATION_ID);
+      Logger.log(`✓ Successfully accessed master presentation: ${masterPresentation.getName()}`);
+    } catch (e) {
+      Logger.log(`✗ Cannot access master presentation: ${e.message}`);
+    }
+
+    // Test selection
+    let selectedRange = null;
+    const activeSheet = SpreadsheetApp.getActiveSheet();
+    Logger.log(`Current active sheet: ${activeSheet.getName()}`);
+    
+    if (activeSheet && activeSheet.getName() === STAFF_DIRECTORY_SHEET_NAME) {
+      selectedRange = activeSheet.getActiveRange();
+      Logger.log(`✓ Got selection from active sheet: ${selectedRange.getA1Notation()}`);
+    } else {
+      Logger.log(`✗ Active sheet is not Staff Directory. Please switch to Staff Directory sheet.`);
+      SpreadsheetApp.getUi().alert('Debug Result', 'Please make sure you are on the Staff Directory sheet and have selected some rows before running this debug function.', SpreadsheetApp.getUi().ButtonSet.OK);
+      return;
+    }
+
+    // Test data reading
+    let debugInfo = [`Active Sheet: ${activeSheet.getName()}`, `Selection: ${selectedRange.getA1Notation()}`, `Rows: ${selectedRange.getRow()} to ${selectedRange.getLastRow()}`, '', 'Row Data:'];
+    
+    for (let row = selectedRange.getRow(); row <= selectedRange.getLastRow(); row++) {
+      if (row === 1) {
+        debugInfo.push(`Row ${row}: [HEADER ROW - SKIPPED]`);
+        continue;
+      }
+      
+      const rowData = staffSheet.getRange(row, 1, 1, 5).getValues()[0];
+      const firstName = rowData[COLUMNS.FIRST_NAME] ? String(rowData[COLUMNS.FIRST_NAME]).trim() : '';
+      const lastName = rowData[COLUMNS.LAST_NAME] ? String(rowData[COLUMNS.LAST_NAME]).trim() : '';
+      const email = rowData[COLUMNS.EMAIL] ? String(rowData[COLUMNS.EMAIL]).trim() : '';
+      const existingUrl = rowData[COLUMNS.AGENDA_URL] ? String(rowData[COLUMNS.AGENDA_URL]).trim() : '';
+      const existingId = rowData[COLUMNS.SLIDE_ID] ? String(rowData[COLUMNS.SLIDE_ID]).trim() : '';
+      
+      debugInfo.push(`Row ${row}: "${firstName}" | "${lastName}" | "${email}" | HasURL: ${!!existingUrl} | HasID: ${!!existingId}`);
+      
+      if (!firstName || !lastName || !email) {
+        debugInfo.push(`  ⚠️  ISSUE: Missing required data (first name, last name, or email)`);
+      } else {
+        debugInfo.push(`  ✓ Valid data found`);
+      }
+    }
+
+    const message = debugInfo.join('\n');
+    Logger.log(message);
+    SpreadsheetApp.getUi().alert('Debug Results', message, SpreadsheetApp.getUi().ButtonSet.OK);
+
+  } catch (e) {
+    const errorMessage = `Debug Error: ${e.message}`;
+    Logger.log(errorMessage);
+    SpreadsheetApp.getUi().alert('Debug Error', errorMessage, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
 }
 
 /**
