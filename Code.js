@@ -333,6 +333,25 @@ function testArchiveOnly() {
 }
 
 /**
+ * Test function to verify archive date retrieval specifically for September 1, 2025.
+ * This helps troubleshoot the user's specific issue with date detection.
+ */
+function testArchiveDateRetrieval() {
+  Logger.log('=== Testing Archive Date Retrieval for 2025-09-01 ===');
+  
+  // First, debug the archive sheet formats
+  debugArchiveDateFormats('Archive_2025_09');
+  
+  // Then try to retrieve data for the specific date
+  Logger.log('\n=== Attempting to retrieve data for 2025-09-01 ===');
+  const result = getArchivedDataForDate('2025-09-01');
+  Logger.log(`Result: ${JSON.stringify(result)}`);
+  Logger.log(`Found ${result.payload ? result.payload.length : 0} records`);
+  
+  Logger.log('=== Archive Date Retrieval Test Complete ===');
+}
+
+/**
  * Helper function to set up the required triggers programmatically.
  * Run this once to set up both the hourly extraction and daily archive triggers.
  * 
@@ -419,7 +438,7 @@ function archiveCurrentDayDataOnly() {
   
   try {
     const today = new Date();
-    const dateString = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const dateString = normalizeDateToString(today);
     
     Logger.log(`Starting daily archive process for ${dateString}`);
     
@@ -514,7 +533,7 @@ function archiveCurrentDayData(date) {
     }
     
     const archiveSheet = getOrCreateArchiveSheet(date);
-    const dateString = Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    const dateString = normalizeDateToString(date);
     
     for (let i = 1; i < values.length; i++) {
       const rowValues = values[i];
@@ -541,6 +560,51 @@ function archiveCurrentDayData(date) {
 }
 
 /**
+ * Normalizes date values to YYYY-MM-DD string format for consistent comparison.
+ * @param {Date|string|number} dateValue The date value to normalize
+ * @returns {string|null} The date in YYYY-MM-DD format, or null if invalid
+ */
+function normalizeDateToString(dateValue) {
+  try {
+    let date;
+    
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    } else if (typeof dateValue === 'string') {
+      // Handle various string formats
+      if (dateValue.includes('/')) {
+        // Handle formats like "9/1/2025" or "09/01/2025"
+        date = new Date(dateValue);
+      } else if (dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // Already in YYYY-MM-DD format
+        return dateValue;
+      } else {
+        date = new Date(dateValue);
+      }
+    } else if (typeof dateValue === 'number') {
+      // Excel serial date number
+      date = new Date(dateValue);
+    } else {
+      return null;
+    }
+    
+    if (isNaN(date.getTime())) {
+      return null;
+    }
+    
+    // Format as YYYY-MM-DD
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+    
+  } catch (e) {
+    Logger.log(`Error normalizing date value: ${dateValue}, Error: ${e.message}`);
+    return null;
+  }
+}
+
+/**
  * Retrieves archived agenda data for a specific date.
  * @param {string} dateString The date in 'YYYY-MM-DD' format
  * @returns {Object} An object containing the archived data or error
@@ -550,16 +614,27 @@ function getArchivedDataForDate(dateString) {
   const ARCHIVE_SHEET_PREFIX = CONSTANTS.ARCHIVE_SHEET_PREFIX;
   
   try {
-    const date = new Date(dateString);
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
+    // Extract year and month directly from YYYY-MM-DD string to avoid timezone issues
+    const dateParts = dateString.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!dateParts) {
+      throw new Error(`Invalid date format. Expected YYYY-MM-DD, got: ${dateString}`);
+    }
+    
+    const year = dateParts[1];
+    const month = dateParts[2];
     const archiveSheetName = `${ARCHIVE_SHEET_PREFIX}${year}_${month}`;
     
+    Logger.log(`Parsing date: ${dateString} -> Year: ${year}, Month: ${month}`);
+    Logger.log(`Looking for archive sheet: ${archiveSheetName}`);
+    
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
     const archiveSheet = spreadsheet.getSheetByName(archiveSheetName);
     if (!archiveSheet) {
+      Logger.log(`Archive sheet "${archiveSheetName}" not found. Available sheets: ${spreadsheet.getSheets().map(s => s.getName()).join(', ')}`);
       return { payload: [] };
     }
+    
+    Logger.log(`Successfully found archive sheet: ${archiveSheetName}`);
     
     const range = archiveSheet.getDataRange();
     const values = range.getValues();
@@ -571,12 +646,23 @@ function getArchivedDataForDate(dateString) {
     
     const headers = values[0];
     const data = [];
+    const targetDate = normalizeDateToString(dateString);
+    
+    Logger.log(`Searching for archived data for date: ${dateString} (normalized: ${targetDate})`);
+    Logger.log(`Archive sheet ${archiveSheetName} has ${values.length - 1} data rows`);
     
     for (let i = 1; i < values.length; i++) {
       const currentRowValues = values[i];
       const currentRowFormulas = formulas[i];
+      const rowDate = normalizeDateToString(currentRowValues[0]);
       
-      if (currentRowValues[0] === dateString) {
+      // Debug logging for first few rows
+      if (i <= 3) {
+        Logger.log(`Row ${i}: Original date value: ${currentRowValues[0]}, Type: ${typeof currentRowValues[0]}, Normalized: ${rowDate}`);
+      }
+      
+      if (rowDate === targetDate) {
+        Logger.log(`Found matching date at row ${i}: ${currentRowValues[0]} -> ${rowDate}`);
         const obj = {};
         
         for (let j = 1; j < headers.length; j++) {
@@ -600,6 +686,63 @@ function getArchivedDataForDate(dateString) {
 }
 
 /**
+ * Debug function to inspect the format and content of dates in archive sheets.
+ * This helps troubleshoot date matching issues.
+ * @param {string} archiveSheetName Optional specific archive sheet name to inspect
+ */
+function debugArchiveDateFormats(archiveSheetName) {
+  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+  const ARCHIVE_SHEET_PREFIX = CONSTANTS.ARCHIVE_SHEET_PREFIX;
+  
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheets = archiveSheetName ? 
+      [spreadsheet.getSheetByName(archiveSheetName)] : 
+      spreadsheet.getSheets().filter(sheet => sheet.getName().startsWith(ARCHIVE_SHEET_PREFIX));
+    
+    Logger.log(`=== DEBUGGING ARCHIVE DATE FORMATS ===`);
+    
+    sheets.forEach(sheet => {
+      if (!sheet) return;
+      
+      Logger.log(`\nSheet: ${sheet.getName()}`);
+      const range = sheet.getDataRange();
+      const values = range.getValues();
+      
+      if (values.length <= 1) {
+        Logger.log(`  No data rows found`);
+        return;
+      }
+      
+      Logger.log(`  Headers: ${values[0].join(' | ')}`);
+      Logger.log(`  Total rows: ${values.length - 1}`);
+      
+      // Inspect first 5 date values
+      for (let i = 1; i < Math.min(6, values.length); i++) {
+        const dateValue = values[i][0];
+        const normalized = normalizeDateToString(dateValue);
+        Logger.log(`  Row ${i}: "${dateValue}" (${typeof dateValue}) -> normalized: "${normalized}"`);
+        
+        if (dateValue instanceof Date) {
+          Logger.log(`    Date details: ${dateValue.toISOString()}, Local: ${dateValue.toLocaleDateString()}`);
+        }
+      }
+      
+      // Show unique date values in column A
+      const uniqueDates = new Set();
+      for (let i = 1; i < values.length; i++) {
+        const normalized = normalizeDateToString(values[i][0]);
+        if (normalized) uniqueDates.add(normalized);
+      }
+      Logger.log(`  Unique normalized dates: ${Array.from(uniqueDates).sort().join(', ')}`);
+    });
+    
+  } catch (e) {
+    Logger.log(`Error in debugArchiveDateFormats: ${e.message}`);
+  }
+}
+
+/**
  * Gets a list of all available archive dates.
  * @returns {Array<string>} Array of date strings in 'YYYY-MM-DD' format
  */
@@ -619,8 +762,9 @@ function getAvailableArchiveDates() {
         const values = range.getValues();
         
         for (let i = 1; i < values.length; i++) {
-          if (values[i][0]) {
-            dates.add(values[i][0]);
+          const normalizedDate = normalizeDateToString(values[i][0]);
+          if (normalizedDate) {
+            dates.add(normalizedDate);
           }
         }
       }
@@ -845,6 +989,8 @@ function onOpen() {
     .addSeparator()
     .addItem('Archive Current Day Data Now', 'archiveCurrentDayDataOnly')
     .addItem('Test Archive Function', 'testArchiveOnly')
+    .addItem('Test Archive Date Retrieval', 'testArchiveDateRetrieval')
+    .addItem('Debug Archive Date Formats', 'debugArchiveDateFormats')
     .addSeparator()
     .addItem('View Trigger Setup Instructions', 'setupTriggersInstructions');
 
