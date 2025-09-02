@@ -121,7 +121,9 @@ function extractTextForCurrentDayAgenda(dayToTest) {
   const monday = getMondayOfCurrentWeek();
   const formattedMonday = Utilities.formatDate(monday, Session.getScriptTimeZone(), 'M/d/yyyy');
   const weekOfText = `WEEK OF ${formattedMonday}`.toUpperCase();
-  Logger.log(`Searching for slides with the text: "${weekOfText}"`);
+  const semanaDeText = `SEMANA DE ${formattedMonday}`.toUpperCase();
+  Logger.log(`Searching for slides with English text: "${weekOfText}"`);
+  Logger.log(`Searching for slides with Spanish text: "${semanaDeText}"`);
 
   const currentDayBoxes = BOX_COORDINATES[dayOfWeek];
   const upcomingBox = BOX_COORDINATES['Upcoming'];
@@ -154,11 +156,18 @@ function extractTextForCurrentDayAgenda(dayToTest) {
       }
 
       let agendaSlide = null;
+      let matchedPattern = '';
       for (const slide of slides) {
         const shapes = slide.getShapes();
         for (const shape of shapes) {
-          if (shape.getText().asString().toUpperCase().includes(weekOfText)) {
+          const shapeText = shape.getText().asString().toUpperCase();
+          if (shapeText.includes(weekOfText)) {
             agendaSlide = slide;
+            matchedPattern = 'English (WEEK OF)';
+            break;
+          } else if (shapeText.includes(semanaDeText)) {
+            agendaSlide = slide;
+            matchedPattern = 'Spanish (SEMANA DE)';
             break;
           }
         }
@@ -168,8 +177,10 @@ function extractTextForCurrentDayAgenda(dayToTest) {
       }
 
       if (!agendaSlide) {
-        throw new Error(`Slide with text "${weekOfText}" not found.`);
+        throw new Error(`Slide not found with either "${weekOfText}" or "${semanaDeText}".`);
       }
+      
+      Logger.log(`Found agenda slide using ${matchedPattern} pattern for ${teacherLastName.trim()} - ${className.trim()}`);
 
       const pageElements = agendaSlide.getPageElements();
       let topBoxText = 'N/A', midBoxText = 'N/A', botBoxText = 'N/A', upcomingText = 'N/A';
