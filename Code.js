@@ -4,6 +4,30 @@
  * It relies on a separate 'Constants.gs' file for configuration.
  */
 
+// --- TRIGGER SUPPORT FUNCTIONS ---
+/**
+ * Wrapper function designed to be called by a timed trigger.
+ * It calls the main extraction function without passing any arguments,
+ * which prevents the trigger's event object from causing errors.
+ */
+function runDailyExtractionTrigger() {
+  Logger.log('Timed trigger initiated.');
+  extractTextForCurrentDayAgenda();
+}
+
+/**
+ * Checks if the script is running in a context where it can access the user interface.
+ * @returns {boolean} True if the UI is available, false otherwise.
+ */
+function isUiAvailable() {
+  try {
+    SpreadsheetApp.getUi();
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 /**
  * Gets the date for the Monday of the current week.
  * @returns {Date} A Date object set to the preceding Monday.
@@ -86,15 +110,21 @@ function extractTextForCurrentDayAgenda(dayToTest) {
 
   const configSheet = spreadsheet.getSheetByName(CONFIG_SHEET_NAME);
   if (!configSheet) {
-    Logger.log(`Error: Configuration sheet '${CONFIG_SHEET_NAME}' not found.`);
-    SpreadsheetApp.getUi().alert(`Error: Configuration sheet '${CONFIG_SHEET_NAME}' not found. Please ensure it exists.`);
+    const errorMessage = `Error: Configuration sheet '${CONFIG_SHEET_NAME}' not found. Please ensure it exists.`;
+    Logger.log(errorMessage);
+    if (isUiAvailable()) {
+      SpreadsheetApp.getUi().alert(errorMessage);
+    }
     return;
   }
 
   let dataSheet = spreadsheet.getSheetByName(DATA_SHEET_NAME);
   if (!dataSheet) {
-    Logger.log(`Error: Data sheet '${DATA_SHEET_NAME}' not found. Please ensure it exists.`);
-    SpreadsheetApp.getUi().alert(`Error: Data sheet '${DATA_SHEET_NAME}' not found. Please ensure it exists.`);
+    const errorMessage = `Error: Data sheet '${DATA_SHEET_NAME}' not found. Please ensure it exists.`;
+    Logger.log(errorMessage);
+    if (isUiAvailable()) {
+      SpreadsheetApp.getUi().alert(errorMessage);
+    }
     return;
   }
 
@@ -114,7 +144,9 @@ function extractTextForCurrentDayAgenda(dayToTest) {
       `The provided test day '${dayToTest}' has no coordinates defined.` :
       `Today is ${dayOfWeek}. No agenda extraction scheduled for this day.`;
     Logger.log(message);
-    SpreadsheetApp.getUi().alert(message);
+    if (isUiAvailable()) {
+      SpreadsheetApp.getUi().alert(message);
+    }
     return;
   }
 
@@ -132,8 +164,11 @@ function extractTextForCurrentDayAgenda(dayToTest) {
   const configValues = configDataRange.getValues();
 
   if (configValues.length === 0 || configValues[0].every(cell => !cell)) {
-    Logger.log('No presentation IDs found in the configuration sheet.');
-    SpreadsheetApp.getUi().alert('No presentation IDs found in the configuration sheet.');
+    const errorMessage = 'No presentation IDs found in the configuration sheet.';
+    Logger.log(errorMessage);
+    if (isUiAvailable()) {
+      SpreadsheetApp.getUi().alert(errorMessage);
+    }
     return;
   }
 
@@ -253,12 +288,17 @@ function extractTextForCurrentDayAgenda(dayToTest) {
     }
   });
 
+  const completionMessage = 'Data for ' + dayOfWeek + ' has been extracted and compiled into the "' + DATA_SHEET_NAME + '" tab.';
   Logger.log('All text extraction for current day complete and data appended to Google Sheet.');
-  SpreadsheetApp.getUi().alert(
-    'Daily Agenda Extraction Complete!',
-    'Data for ' + dayOfWeek + ' has been extracted and compiled into the "' + DATA_SHEET_NAME + '" tab.',
-    SpreadsheetApp.getUi().ButtonSet.OK
-  );
+  Logger.log(completionMessage);
+  
+  if (isUiAvailable()) {
+    SpreadsheetApp.getUi().alert(
+      'Daily Agenda Extraction Complete!',
+      completionMessage,
+      SpreadsheetApp.getUi().ButtonSet.OK
+    );
+  }
 }
 
 // --- NEW TESTING FUNCTIONS ---
