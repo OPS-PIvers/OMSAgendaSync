@@ -199,7 +199,7 @@
     <!-- Header -->
     <header class="text-center mb-8 no-print">
       <div class="flex items-center justify-center gap-4 mb-4">
-        <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 tracking-tight">Daily Snapshot</h1>
+        <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 tracking-tight">OMS Daily Snapshot</h1>
         <button id="archive-button" class="text-gray-600 hover:text-gray-800 transition-colors" aria-label="View Past Agendas" title="View Past Agendas">
           <i class="fas fa-calendar-alt text-2xl"></i>
         </button>
@@ -368,11 +368,11 @@
     
     function getSubjectColors(className = '') {
         const name = className.toLowerCase();
-        if (name.includes('math')) return { headerClass: 'text-blue-800', cardClasses: 'bg-blue-50 border-blue-200' };
+        if (name.includes('math') || name.includes('algebra') || name.includes('geometry')) return { headerClass: 'text-blue-800', cardClasses: 'bg-blue-50 border-blue-200' };
         if (name.includes('english') || name.includes('reading') || name.includes('language')) return { headerClass: 'text-red-800', cardClasses: 'bg-red-50 border-red-200' };
         if (name.includes('science')) return { headerClass: 'text-green-800', cardClasses: 'bg-green-50 border-green-200' };
-        if (name.includes('social') || name.includes('history')) return { headerClass: 'text-yellow-800', cardClasses: 'bg-yellow-50 border-yellow-200' };
-        if (name.includes('exploratory') || name.includes('art') || name.includes('music') || name.includes('tech') || name.includes('band') || name.includes('computer')) return { headerClass: 'text-purple-800', cardClasses: 'bg-purple-50 border-purple-200' };
+        if (name.includes('social') || name.includes('history') || name.includes('global')) return { headerClass: 'text-yellow-800', cardClasses: 'bg-yellow-50 border-yellow-200' };
+        if (name.includes('exploratory') || name.includes('art') || name.includes('music') || name.includes('tech') || name.includes('band') || name.includes('computer') || name.includes('robotics') || name.includes('design') || name.includes('solar') || name.includes('technology') || name.includes('spanish') || name.includes('phy ed') || name.includes('health')) return { headerClass: 'text-purple-800', cardClasses: 'bg-purple-50 border-purple-200' };
         return { headerClass: 'text-gray-800', cardClasses: 'bg-white border-gray-200' };
     }
 
@@ -389,15 +389,43 @@
             const textElement = document.createElement('div');
             textElement.className = 'section-text';
             
-            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/i;
-            const match = typeof content === 'string' ? content.match(hyperlinkRegex) : null;
-
-            if (match) {
-                const url = match[1];
-                const linkText = match[2].replace(/""/g, '"');
-                textElement.innerHTML = `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${safeText(linkText)}</a>`;
+            // Handle HYPERLINK formulas - first extract all complete HYPERLINK formulas, then process remaining text
+            let processedContent = content || 'N/A';
+            
+            if (typeof processedContent === 'string') {
+                // Global regex to find all complete HYPERLINK formulas (including multi-line text)
+                const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/gi;
+                const links = [];
+                let remainingContent = processedContent;
+                let match;
+                
+                // Extract all HYPERLINK formulas
+                while ((match = hyperlinkRegex.exec(processedContent)) !== null) {
+                    const url = match[1];
+                    const linkText = match[2].replace(/""/g, '"');
+                    links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${safeText(linkText)}</a>`);
+                    // Remove this HYPERLINK formula from remaining content
+                    remainingContent = remainingContent.replace(match[0], '').trim();
+                }
+                
+                // Combine processed links with any remaining plain text
+                const allContent = [];
+                if (links.length > 0) {
+                    allContent.push(...links);
+                }
+                if (remainingContent && remainingContent !== '') {
+                    // Split remaining text by newlines and add each non-empty line
+                    const remainingLines = remainingContent.split('\n').filter(line => line.trim());
+                    remainingLines.forEach(line => allContent.push(safeText(line)));
+                }
+                
+                if (allContent.length > 0) {
+                    textElement.innerHTML = allContent.join('<br>');
+                } else {
+                    textElement.innerHTML = safeText(processedContent);
+                }
             } else {
-                textElement.innerHTML = safeText(content);
+                textElement.innerHTML = safeText(processedContent);
             }
 
             section.innerHTML = `<h3 class="section-label">${label}</h3>`;
@@ -636,13 +664,36 @@
         const processCellContent = (content) => {
             if (!content) return 'N/A';
             
-            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/i;
-            const match = content.match(hyperlinkRegex);
-
-            if (match) {
+            // Extract all complete HYPERLINK formulas first
+            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/gi;
+            const links = [];
+            let remainingContent = content;
+            let match;
+            
+            // Find all HYPERLINK formulas
+            while ((match = hyperlinkRegex.exec(content)) !== null) {
                 const url = match[1];
                 const text = match[2].replace(/""/g, '"').replace(/→|!/g, '• ');
-                return { text, url };
+                links.push({ text, url });
+                // Remove this HYPERLINK formula from remaining content
+                remainingContent = remainingContent.replace(match[0], '').trim();
+            }
+            
+            // Process any remaining plain text
+            const remainingLines = remainingContent ? 
+                remainingContent.split('\n').filter(line => line.trim()).map(line => line.replace(/→|!/g, '• ')) : 
+                [];
+            
+            if (links.length === 1 && remainingLines.length === 0) {
+                // Single hyperlink only - return as object for PDF link functionality
+                return links[0];
+            } else if (links.length > 0 || remainingLines.length > 0) {
+                // Multiple items or mix of links and text - return as formatted text
+                const allItems = [
+                    ...links.map(link => `${link.text} (${link.url})`),
+                    ...remainingLines
+                ];
+                return allItems.join('\n• ');
             }
             
             return content.replace(/→|!/g, '• ');

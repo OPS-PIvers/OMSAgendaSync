@@ -16,37 +16,55 @@ function getMondayOfCurrentWeek() {
 }
 
 /**
- * Extracts the full text from a shape and the URL of the first hyperlink found.
- * If a link is found, it returns a Google Sheets HYPERLINK formula.
+ * Extracts text from a shape while preserving all individual hyperlinks.
+ * Returns either plain text or multiple HYPERLINK formulas joined together.
  * @param {GoogleAppsScript.Slides.TextRange} textRange The TextRange from a shape.
- * @returns {string} The plain text content, or a HYPERLINK formula string if a link is found.
+ * @returns {string} The text content with preserved hyperlinks as HYPERLINK formulas.
  */
-function extractTextAndFirstLink(textRange) {
+function extractTextWithAllLinks(textRange) {
   const fullText = textRange.asString().trim();
   if (fullText === '') {
     return 'N/A'; // Return a default value for empty text boxes
   }
 
-  let firstLinkUrl = null;
   const runs = textRange.getRuns();
+  const textParts = [];
+  
   for (const run of runs) {
-    // CORRECTED AND VERIFIED METHOD: Get the TextStyle, then the Link object, then the URL.
+    const runText = run.asString();
+    if (runText.trim() === '') continue; // Skip empty runs
+    
     const link = run.getTextStyle().getLink();
-    if (link) {
-      firstLinkUrl = link.getUrl();
-      // If a URL is found, we've got what we need and can exit the loop.
-      if (firstLinkUrl) {
-        break;
+    if (link && link.getUrl()) {
+      // This run has a hyperlink - create a HYPERLINK formula for it
+      const url = link.getUrl();
+      const linkText = runText.trim();
+      textParts.push(`=HYPERLINK("${url}", "${linkText.replace(/"/g, '""')}")`);
+    } else {
+      // This run has no hyperlink - add as plain text
+      const plainText = runText.trim();
+      if (plainText) {
+        textParts.push(plainText);
       }
     }
   }
-
-  if (firstLinkUrl) {
-    // Create a formula for Google Sheets. We must escape double quotes within the text.
-    return `=HYPERLINK("${firstLinkUrl}", "${fullText.replace(/"/g, '""')}")`;
-  } else {
-    return fullText;
+  
+  if (textParts.length === 0) {
+    return fullText; // Fallback to original text if no parts were processed
   }
+  
+  // Join the parts with newlines for better readability in the spreadsheet
+  return textParts.join('\n');
+}
+
+/**
+ * Legacy function kept for backward compatibility - now calls the new multi-link function
+ * @deprecated Use extractTextWithAllLinks instead
+ * @param {GoogleAppsScript.Slides.TextRange} textRange The TextRange from a shape.
+ * @returns {string} The text content with preserved hyperlinks.
+ */
+function extractTextAndFirstLink(textRange) {
+  return extractTextWithAllLinks(textRange);
 }
 
 
@@ -182,7 +200,7 @@ function extractTextForCurrentDayAgenda(dayToTest) {
           const textRange = shape.getText();
           if (textRange.isEmpty()) return;
 
-          const cellValue = extractTextAndFirstLink(textRange);
+          const cellValue = extractTextWithAllLinks(textRange);
           const shapeText = textRange.asString().trim();
 
           // Debug logging for Tuesday shapes with content
