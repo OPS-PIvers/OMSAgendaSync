@@ -560,47 +560,42 @@ function archiveCurrentDayData(date) {
 }
 
 /**
- * Normalizes date values to YYYY-MM-DD string format for consistent comparison.
- * @param {Date|string|number} dateValue The date value to normalize
- * @returns {string|null} The date in YYYY-MM-DD format, or null if invalid
+ * Normalizes a date value to YYYY-MM-DD string format.
+ * Handles Date objects, various string formats, and timezone issues.
+ * @param {Date|string} dateValue The date value to normalize
+ * @returns {string} The normalized date string in YYYY-MM-DD format
  */
 function normalizeDateToString(dateValue) {
   try {
-    let date;
+    if (!dateValue) return '';
     
+    // If it's already a string in YYYY-MM-DD format, return as-is
+    if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      return dateValue;
+    }
+    
+    // Convert to Date object
+    let dateObj;
     if (dateValue instanceof Date) {
-      date = dateValue;
-    } else if (typeof dateValue === 'string') {
-      // Handle various string formats
-      if (dateValue.includes('/')) {
-        // Handle formats like "9/1/2025" or "09/01/2025"
-        date = new Date(dateValue);
-      } else if (dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // Already in YYYY-MM-DD format
-        return dateValue;
-      } else {
-        date = new Date(dateValue);
-      }
-    } else if (typeof dateValue === 'number') {
-      // Excel serial date number
-      date = new Date(dateValue);
+      dateObj = dateValue;
     } else {
-      return null;
+      dateObj = new Date(dateValue);
     }
     
-    if (isNaN(date.getTime())) {
-      return null;
+    // Check if it's a valid date
+    if (isNaN(dateObj.getTime())) {
+      return '';
     }
     
-    // Format as YYYY-MM-DD
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    // Format as YYYY-MM-DD (force local timezone to avoid UTC conversion issues)
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    
     return `${year}-${month}-${day}`;
-    
   } catch (e) {
-    Logger.log(`Error normalizing date value: ${dateValue}, Error: ${e.message}`);
-    return null;
+    Logger.log(`Error normalizing date ${dateValue}: ${e.message}`);
+    return '';
   }
 }
 
@@ -645,8 +640,26 @@ function getArchivedDataForDate(dateString) {
     }
     
     const headers = values[0];
+    Logger.log(`Archive headers: ${JSON.stringify(headers)}`);
+    
+    // Log first few data rows to understand the date format
+    Logger.log(`=== INSPECTING ARCHIVE DATA ===`);
+    for (let i = 1; i < Math.min(6, values.length); i++) {
+      const dateValue = values[i][0];
+      Logger.log(`Row ${i}: Date value = ${dateValue} (type: ${typeof dateValue})`);
+      if (dateValue instanceof Date) {
+        Logger.log(`  - Date object: ${dateValue.toString()}`);
+        Logger.log(`  - ISO string: ${dateValue.toISOString()}`);
+        Logger.log(`  - Local date: ${dateValue.toLocaleDateString()}`);
+      }
+      Logger.log(`  - Normalized: "${normalizeDateToString(dateValue)}"`);
+    }
+    
+    const targetDate = dateString; // Already in YYYY-MM-DD format
+    Logger.log(`Target date for matching: "${targetDate}"`);
+    
     const data = [];
-    const targetDate = normalizeDateToString(dateString);
+    let matchingRows = 0;
     
     Logger.log(`Searching for archived data for date: ${dateString} (normalized: ${targetDate})`);
     Logger.log(`Archive sheet ${archiveSheetName} has ${values.length - 1} data rows`);
@@ -654,15 +667,35 @@ function getArchivedDataForDate(dateString) {
     for (let i = 1; i < values.length; i++) {
       const currentRowValues = values[i];
       const currentRowFormulas = formulas[i];
-      const rowDate = normalizeDateToString(currentRowValues[0]);
+      const archiveDateValue = currentRowValues[0];
+      const normalizedArchiveDate = normalizeDateToString(archiveDateValue);
       
-      // Debug logging for first few rows
-      if (i <= 3) {
-        Logger.log(`Row ${i}: Original date value: ${currentRowValues[0]}, Type: ${typeof currentRowValues[0]}, Normalized: ${rowDate}`);
+      Logger.log(`Row ${i}: Archive date = "${archiveDateValue}" (${typeof archiveDateValue}), Normalized = "${normalizedArchiveDate}"`);
+      
+      // Try multiple matching strategies
+      let isMatch = false;
+      
+      // Strategy 1: Direct string comparison
+      if (archiveDateValue === targetDate) {
+        isMatch = true;
+        Logger.log(`  ✓ Match found using direct comparison`);
+      }
+      // Strategy 2: Normalized date comparison
+      else if (normalizedArchiveDate === targetDate) {
+        isMatch = true;
+        Logger.log(`  ✓ Match found using normalized comparison`);
+      }
+      // Strategy 3: Date object comparison (for edge cases)
+      else if (archiveDateValue instanceof Date) {
+        const archiveDateString = normalizeDateToString(archiveDateValue);
+        if (archiveDateString === targetDate) {
+          isMatch = true;
+          Logger.log(`  ✓ Match found using Date object normalization`);
+        }
       }
       
-      if (rowDate === targetDate) {
-        Logger.log(`Found matching date at row ${i}: ${currentRowValues[0]} -> ${rowDate}`);
+      if (isMatch) {
+        matchingRows++;
         const obj = {};
         
         for (let j = 1; j < headers.length; j++) {
