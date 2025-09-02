@@ -11,8 +11,18 @@
  * which prevents the trigger's event object from causing errors.
  */
 function runDailyExtractionTrigger() {
-  Logger.log('Timed trigger initiated.');
+  Logger.log('Hourly extraction trigger initiated.');
   extractTextForCurrentDayAgenda();
+}
+
+/**
+ * Wrapper function designed to be called by a daily archive trigger.
+ * This should run once per day (e.g., at 11:30 PM) to archive the final
+ * version of the day's agenda data before starting fresh the next day.
+ */
+function runDailyArchiveTrigger() {
+  Logger.log('Daily archive trigger initiated.');
+  archiveCurrentDayDataOnly();
 }
 
 /**
@@ -129,7 +139,11 @@ function extractTextForCurrentDayAgenda(dayToTest) {
   }
 
   const today = new Date();
-  archiveCurrentDayData(today);
+  
+  // Note: Archiving is now handled by a separate daily trigger (runDailyArchiveTrigger)
+  // This allows teachers to update their agendas throughout the day with only the 
+  // final version being archived at end of day
+  Logger.log('Extraction running - archiving handled separately by daily trigger');
   
   dataSheet.clearContents();
   dataSheet.appendRow([
@@ -289,7 +303,7 @@ function extractTextForCurrentDayAgenda(dayToTest) {
   });
 
   const completionMessage = 'Data for ' + dayOfWeek + ' has been extracted and compiled into the "' + DATA_SHEET_NAME + '" tab.';
-  Logger.log('All text extraction for current day complete and data appended to Google Sheet.');
+  Logger.log('Hourly extraction complete - data updated in Current_Day_Agendas tab (archiving handled by separate daily trigger)');
   Logger.log(completionMessage);
   
   if (isUiAvailable()) {
@@ -307,6 +321,55 @@ function testForTuesday() { extractTextForCurrentDayAgenda('Tuesday'); }
 function testForWednesday() { extractTextForCurrentDayAgenda('Wednesday'); }
 function testForThursday() { extractTextForCurrentDayAgenda('Thursday'); }
 function testForFriday() { extractTextForCurrentDayAgenda('Friday'); }
+
+/**
+ * Test function to verify the archive-only functionality works correctly.
+ * This can be run manually to test the archiving without waiting for the trigger.
+ */
+function testArchiveOnly() {
+  Logger.log('=== Testing Archive Only Function ===');
+  archiveCurrentDayDataOnly();
+  Logger.log('=== Archive Test Complete ===');
+}
+
+/**
+ * Helper function to set up the required triggers programmatically.
+ * Run this once to set up both the hourly extraction and daily archive triggers.
+ * 
+ * IMPORTANT: You need to set up two triggers:
+ * 1. Hourly trigger for runDailyExtractionTrigger() - runs every hour during business hours
+ * 2. Daily trigger for runDailyArchiveTrigger() - runs once daily at 11:30 PM
+ * 
+ * These should be set up in the Google Apps Script trigger interface, not through code,
+ * for better reliability and management.
+ */
+function setupTriggersInstructions() {
+  const message = `
+  To complete the setup, you need to configure two triggers in Google Apps Script:
+  
+  1. HOURLY EXTRACTION TRIGGER:
+     - Function: runDailyExtractionTrigger
+     - Event: Time-driven, Hour timer, Every hour
+     - Time: During business hours (e.g., 6 AM to 6 PM)
+     - This extracts fresh data from slides every hour
+  
+  2. DAILY ARCHIVE TRIGGER:  
+     - Function: runDailyArchiveTrigger
+     - Event: Time-driven, Day timer, Every day
+     - Time: 11:30 PM (or desired end-of-day time)
+     - This archives the final version once per day
+  
+  This setup ensures:
+  - Teachers can update agendas throughout the day
+  - Only final versions get archived (no duplicates)
+  - Current day view stays updated hourly
+  `;
+  
+  Logger.log(message);
+  if (isUiAvailable()) {
+    SpreadsheetApp.getUi().alert('Trigger Setup Instructions', message, SpreadsheetApp.getUi().ButtonSet.OK);
+  }
+}
 // --- END NEW TESTING FUNCTIONS ---
 
 
@@ -346,9 +409,87 @@ function getOrCreateArchiveSheet(date) {
 }
 
 /**
+ * Archives current day data for end-of-day archiving only.
+ * This function includes safety checks to prevent duplicate archiving and
+ * should be called by the daily archive trigger.
+ */
+function archiveCurrentDayDataOnly() {
+  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+  const DATA_SHEET_NAME = CONSTANTS.DATA_SHEET_NAME;
+  
+  try {
+    const today = new Date();
+    const dateString = Utilities.formatDate(today, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    
+    Logger.log(`Starting daily archive process for ${dateString}`);
+    
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const dataSheet = spreadsheet.getSheetByName(DATA_SHEET_NAME);
+    
+    if (!dataSheet) {
+      Logger.log(`Warning: Data sheet '${DATA_SHEET_NAME}' not found for archiving.`);
+      return;
+    }
+    
+    const dataRange = dataSheet.getDataRange();
+    const values = dataRange.getValues();
+    
+    if (values.length <= 1) {
+      Logger.log('No data to archive (only headers present).');
+      return;
+    }
+    
+    // Check if we've already archived data for today to prevent duplicates
+    const archiveSheet = getOrCreateArchiveSheet(today);
+    const archiveRange = archiveSheet.getDataRange();
+    const archiveValues = archiveRange.getValues();
+    
+    // Check if today's data already exists in archive
+    let alreadyArchived = false;
+    for (let i = 1; i < archiveValues.length; i++) {
+      if (archiveValues[i][0] === dateString) {
+        alreadyArchived = true;
+        break;
+      }
+    }
+    
+    if (alreadyArchived) {
+      Logger.log(`Data for ${dateString} has already been archived today. Skipping to prevent duplicates.`);
+      return;
+    }
+    
+    // Proceed with archiving
+    const formulas = dataRange.getFormulas();
+    
+    for (let i = 1; i < values.length; i++) {
+      const rowValues = values[i];
+      const rowFormulas = formulas[i];
+      
+      const archiveRow = [dateString];
+      
+      for (let j = 0; j < rowValues.length; j++) {
+        if (rowFormulas[j]) {
+          archiveRow.push(rowFormulas[j]);
+        } else {
+          archiveRow.push(rowValues[j]);
+        }
+      }
+      
+      archiveSheet.appendRow(archiveRow);
+    }
+    
+    Logger.log(`Successfully archived ${values.length - 1} rows for ${dateString}`);
+    
+  } catch (e) {
+    Logger.log(`Error in daily archive process: ${e.message}`);
+  }
+}
+
+/**
  * Archives current day data by moving it to the appropriate monthly archive sheet.
  * This function should be called before clearing the current day sheet.
  * @param {Date} date The date of the data being archived
+ * @deprecated This function is kept for backward compatibility but should not be used for regular operations
  */
 function archiveCurrentDayData(date) {
   const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
@@ -700,7 +841,12 @@ function updateStaffDirectoryRow(sheet, row, presentationUrl, presentationId) {
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
   const menu = ui.createMenu('Agenda Tools')
-    .addItem('Run Daily Agenda Extraction Now', 'extractTextForCurrentDayAgenda');
+    .addItem('Run Daily Agenda Extraction Now', 'extractTextForCurrentDayAgenda')
+    .addSeparator()
+    .addItem('Archive Current Day Data Now', 'archiveCurrentDayDataOnly')
+    .addItem('Test Archive Function', 'testArchiveOnly')
+    .addSeparator()
+    .addItem('View Trigger Setup Instructions', 'setupTriggersInstructions');
 
   const testSubMenu = ui.createMenu('Run Manual Test As...')
     .addItem('Monday', 'testForMonday')
