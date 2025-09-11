@@ -688,12 +688,16 @@
                 // Single hyperlink only - return as object for PDF link functionality
                 return links[0];
             } else if (links.length > 0 || remainingLines.length > 0) {
-                // Multiple items or mix of links and text - return as formatted text
-                const allItems = [
-                    ...links.map(link => `${link.text} (${link.url})`),
-                    ...remainingLines
-                ];
-                return allItems.join('\n• ');
+                // Mixed content - return array preserving hyperlink structure and order
+                const mixedContent = [];
+                
+                // To preserve order, we need to reconstruct the content by position
+                // For simplicity, we'll add hyperlinks first, then remaining text
+                // This approach works because HYPERLINK formulas are typically at the start of lines
+                links.forEach(link => mixedContent.push(link));
+                remainingLines.forEach(line => mixedContent.push(line));
+                
+                return mixedContent;
             }
             
             return content.replace(/→|!/g, '• ');
@@ -721,14 +725,43 @@
             
             didParseCell: (data) => {
                 if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
+                    // Single hyperlink object
                     data.cell.text = [data.cell.raw.text];
                     data.cell.styles.textColor = '#0000FF';
+                } else if (Array.isArray(data.cell.raw)) {
+                    // Mixed content array - combine text and mark hyperlinks
+                    const textParts = [];
+                    data.cell.raw.forEach(item => {
+                        if (typeof item === 'object' && item.url) {
+                            textParts.push(item.text);
+                        } else {
+                            textParts.push(item);
+                        }
+                    });
+                    data.cell.text = [textParts.join('\n')];
+                    
+                    // Store hyperlink info for drawing phase
+                    data.cell.hyperlinks = data.cell.raw.filter(item => typeof item === 'object' && item.url);
                 }
             },
 
             didDrawCell: (data) => {
                 if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
+                    // Single hyperlink - make entire cell clickable
                     doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: data.cell.raw.url });
+                } else if (Array.isArray(data.cell.raw) && data.cell.hyperlinks && data.cell.hyperlinks.length > 0) {
+                    // Mixed content with hyperlinks - create individual clickable areas
+                    const cellText = data.cell.text[0];
+                    const lineHeight = data.cell.height / cellText.split('\n').length;
+                    let currentY = data.cell.y;
+                    
+                    data.cell.raw.forEach(item => {
+                        if (typeof item === 'object' && item.url) {
+                            // Create clickable area for this hyperlink
+                            doc.link(data.cell.x, currentY, data.cell.width, lineHeight, { url: item.url });
+                        }
+                        currentY += lineHeight;
+                    });
                 }
             }
         });
