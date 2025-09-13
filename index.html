@@ -766,7 +766,8 @@
             }
         });
 
-        doc.save(`Daily_Agenda_${currentGradeFilter.replace(' ', '_')}_${today.toISOString().slice(0,10)}.pdf`);
+        const localDateForFilename = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+        doc.save(`Daily_Agenda_${currentGradeFilter.replace(' ', '_')}_${localDateForFilename}.pdf`);
     }
 
 
