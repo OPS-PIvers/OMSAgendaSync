@@ -33,7 +33,6 @@
 
     .grade-button {
       position: relative;
-      z-index: 10;
       padding: 0.75rem 1.5rem;
       border-radius: 9999px;
       border: none;
@@ -59,7 +58,6 @@
       bottom: 0.25rem;
       border-radius: 9999px;
       transition: left 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), width 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-      z-index: 5;
     }
     
     /* --- Grade Specific Colors --- */
@@ -214,7 +212,7 @@
 
     <!-- Grade Level Navigation -->
     <nav class="mb-8 flex justify-center no-print">
-      <div id="grade-nav" class="grade-nav-container z-10">
+      <div id="grade-nav" class="grade-nav-container">
         <div id="active-grade-pill"></div>
         <button class="grade-button" data-grade="6th Grade">6th Grade</button>
         <button class="grade-button" data-grade="7th Grade">7th Grade</button>
@@ -385,7 +383,10 @@
         const card = document.createElement('div');
         card.className = 'agenda-card';
 
-        const safeText = (text) => (text || 'N/A').replace(/\n/g, '<br>').replace(/→/g, '<span class="mr-2 text-indigo-500">→</span>');
+        const safeText = (text) => {
+            const stringText = (text == null) ? 'N/A' : String(text);
+            return stringText.replace(/\n/g, '<br>').replace(/→/g, '<span class="mr-2 text-indigo-500">→</span>');
+        };
 
         const createSection = (label, content) => {
             const section = document.createElement('div');
