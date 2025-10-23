@@ -549,18 +549,49 @@
 
     function onSuccess(response) {
       hideLoadingSkeletons();
-      
-      let data = [];
-      if (Array.isArray(response)) {
-        data = response;
-      } else if (response && Array.isArray(response.payload)) {
-        data = response.payload;
-      } else {
-        console.warn('Received data in an unexpected format:', response);
+
+      // Enhanced diagnostic logging
+      console.log('=== DATA FETCH SUCCESS ===');
+      console.log('Response type:', typeof response);
+      console.log('Response is null:', response === null);
+      console.log('Response is undefined:', response === undefined);
+      console.log('Response value:', response);
+
+      // Handle null or undefined response
+      if (response === null || response === undefined) {
+        console.error('CRITICAL: Received null or undefined response from backend');
+        showMessage('Error: No response from server. Please check Google Apps Script logs and refresh the page.', 'error');
+        fabContainer.classList.add('hidden');
+        return;
       }
 
-      console.log(`Archive data loaded: ${data.length} records for date: ${currentArchiveDate}`);
-      console.log('Data preview:', data.slice(0, 2)); // Log first 2 records for debugging
+      let data = [];
+      if (Array.isArray(response)) {
+        console.log('Response format: Direct array');
+        data = response;
+      } else if (response && typeof response === 'object' && Array.isArray(response.payload)) {
+        console.log('Response format: Object with payload array');
+        data = response.payload;
+      } else if (response && typeof response === 'object' && response.payload === undefined) {
+        console.error('Response is an object but has no payload property:', Object.keys(response));
+        showMessage('Error: Invalid data format from server. Please check Google Apps Script logs.', 'error');
+        fabContainer.classList.add('hidden');
+        return;
+      } else {
+        console.error('Received data in an unexpected format:', response);
+        console.error('Response type:', typeof response);
+        console.error('Is array?', Array.isArray(response));
+        console.error('Has payload?', response && 'payload' in response);
+        showMessage('Error: Unexpected data format. Please check browser console and Google Apps Script logs.', 'error');
+        fabContainer.classList.add('hidden');
+        return;
+      }
+
+      console.log(`Data loaded successfully: ${data.length} records`);
+      if (currentArchiveDate) {
+        console.log(`Archive date: ${currentArchiveDate}`);
+      }
+      console.log('Data preview (first 2 records):', data.slice(0, 2));
 
       allAgendaData = data;
       updateDateDisplay();
