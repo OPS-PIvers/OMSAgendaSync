@@ -1134,10 +1134,6 @@ function getAgendaData() {
     Logger.log(`getAgendaData called - SPREADSHEET_ID: ${SPREADSHEET_ID}, DATA_SHEET_NAME: ${DATA_SHEET_NAME}`);
 
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-    if (!spreadsheet) {
-      Logger.log('ERROR: Could not open spreadsheet.');
-      return { error: 'Could not access spreadsheet' };
-    }
 
     const dataSheet = spreadsheet.getSheetByName(DATA_SHEET_NAME);
     if (!dataSheet) {
