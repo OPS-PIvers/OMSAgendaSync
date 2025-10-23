@@ -1110,52 +1110,244 @@ function doGet() {
  * *** THIS FUNCTION HAS BEEN CORRECTED TO RETURN DATA IN THE EXPECTED FORMAT ***
  */
 function getAgendaData() {
+  const execId = Utilities.getUuid().substring(0, 8);
+  Logger.log(`[${execId}] getAgendaData started`);
+
   try {
-    // Validate CONSTANTS is available
     if (typeof CONSTANTS === 'undefined') {
-      Logger.log('CRITICAL ERROR: CONSTANTS object is undefined. Constants.js may not be loaded.');
+      Logger.log(`[${execId}] ERROR: CONSTANTS not loaded`);
       return { error: 'Configuration error: CONSTANTS not loaded' };
     }
 
     const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
     const DATA_SHEET_NAME = CONSTANTS.DATA_SHEET_NAME;
 
-    // Validate required constants
-    if (!SPREADSHEET_ID) {
-      Logger.log('CRITICAL ERROR: SPREADSHEET_ID is not defined in CONSTANTS.');
-      return { error: 'Configuration error: SPREADSHEET_ID not defined' };
+    if (!SPREADSHEET_ID || !DATA_SHEET_NAME) {
+      Logger.log(`[${execId}] ERROR: Missing configuration`);
+      return { error: 'Configuration error: Missing required constants' };
     }
-
-    if (!DATA_SHEET_NAME) {
-      Logger.log('CRITICAL ERROR: DATA_SHEET_NAME is not defined in CONSTANTS.');
-      return { error: 'Configuration error: DATA_SHEET_NAME not defined' };
-    }
-
-    Logger.log(`getAgendaData called - SPREADSHEET_ID: ${SPREADSHEET_ID}, DATA_SHEET_NAME: ${DATA_SHEET_NAME}`);
 
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-
     const dataSheet = spreadsheet.getSheetByName(DATA_SHEET_NAME);
+
     if (!dataSheet) {
-      Logger.log(`ERROR: Data sheet '${DATA_SHEET_NAME}' not found.`);
+      Logger.log(`[${execId}] ERROR: Data sheet not found`);
       return { error: `Data sheet '${DATA_SHEET_NAME}' not found` };
     }
 
     const range = dataSheet.getDataRange();
     const values = range.getValues();
-    const formulas = range.getFormulas();
 
     if (values.length <= 1) {
-      Logger.log('No data rows found in Current_Day_Agendas sheet (only headers or empty).');
-      return { payload: [] }; // Return the expected structure with an empty array
+      Logger.log(`[${execId}] No data rows found`);
+      return { payload: [] };
     }
 
     const headers = values[0];
     const data = [];
 
-    Logger.log(`Processing ${values.length - 1} rows of data...`);
+    for (let i = 1; i < values.length; i++) {
+      const obj = {};
+      const currentRowValues = values[i];
+
+      headers.forEach((header, j) => {
+        const cleanedHeader = header.replace(/[^a-zA-Z0-9]/g, '');
+        let value = currentRowValues[j];
+
+        // Force conversion to string to handle Date objects, numbers, and other non-primitive types
+        // that Google Sheets might auto-format (e.g., "3-4" interpreted as a number or date)
+        if (value instanceof Date) {
+          // Convert Date objects to readable string format
+          value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'M/d/yyyy');
+        } else if (value !== null && value !== undefined) {
+          // Convert everything else to string explicitly
+          value = String(value);
+        } else {
+          // Handle null/undefined as empty string
+          value = '';
+        }
+
+        // Truncate long error messages to reduce payload size
+        if (value.length > 100 && (value.includes('Error:') || value.includes('ERROR'))) {
+          value = 'Error loading agenda data';
+        }
+
+        obj[cleanedHeader] = value;
+      });
+      data.push(obj);
+    }
+
+    Logger.log(`[${execId}] Successfully processed ${data.length} records`);
+    return { payload: data };
+
+  } catch (e) {
+    Logger.log(`[${execId}] ERROR: ${e.message}`);
+    return { error: `Failed to fetch agenda data: ${e.message}` };
+  }
+}
+
+
+/**
+ * Simple test function to verify google.script.run communication is working.
+ * Returns a basic object to confirm the pipeline is functional.
+ */
+function testSimpleReturn() {
+  const execId = Utilities.getUuid().substring(0, 8);
+  Logger.log(`[TEST-${execId}] testSimpleReturn called`);
+
+  const testReturn = {
+    test: 'success',
+    timestamp: new Date().toISOString(),
+    message: 'If you see this, google.script.run is working!'
+  };
+
+  Logger.log(`[TEST-${execId}] Returning: ${JSON.stringify(testReturn)}`);
+  return testReturn;
+}
+
+/* ========== DIAGNOSTIC FUNCTIONS (Commented out for production) ==========
+ * Uncomment these functions if you need to debug data loading issues
+ *
+/**
+ * DIAGNOSTIC: Test with just one record to see if single record works
+ *\/
+function testGetAgendaDataOneRecord() {
+  const execId = Utilities.getUuid().substring(0, 8);
+  Logger.log(`[DIAG1-${execId}] Testing with single record only`);
+
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONSTANTS.SPREADSHEET_ID);
+    const dataSheet = spreadsheet.getSheetByName(CONSTANTS.DATA_SHEET_NAME);
+    const range = dataSheet.getDataRange();
+    const values = range.getValues();
+
+    if (values.length <= 1) {
+      Logger.log(`[DIAG1-${execId}] No data rows found`);
+      return { payload: [] };
+    }
+
+    const headers = values[0];
+    const firstRow = values[1];
+    const obj = {};
+
+    headers.forEach((header, j) => {
+      const cleanedHeader = header.replace(/[^a-zA-Z0-9]/g, '');
+      obj[cleanedHeader] = firstRow[j]; // Just values, no formulas
+    });
+
+    const jsonStr = JSON.stringify(obj);
+    Logger.log(`[DIAG1-${execId}] Single record JSON size: ${jsonStr.length} chars`);
+    Logger.log(`[DIAG1-${execId}] Record preview: ${jsonStr.substring(0, 200)}`);
+
+    const result = { payload: [obj] };
+    Logger.log(`[DIAG1-${execId}] Returning payload with 1 record`);
+    return result;
+
+  } catch (e) {
+    Logger.log(`[DIAG1-${execId}] Error: ${e.message}`);
+    return { error: e.message };
+  }
+}
+
+/**
+ * DIAGNOSTIC: Test with all records but NO formulas (values only)
+ */
+function testGetAgendaDataNoFormulas() {
+  const execId = Utilities.getUuid().substring(0, 8);
+  Logger.log(`[DIAG2-${execId}] Testing all records WITHOUT formulas`);
+
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONSTANTS.SPREADSHEET_ID);
+    const dataSheet = spreadsheet.getSheetByName(CONSTANTS.DATA_SHEET_NAME);
+    const range = dataSheet.getDataRange();
+    const values = range.getValues();
+
+    if (values.length <= 1) {
+      Logger.log(`[DIAG2-${execId}] No data rows found`);
+      return { payload: [] };
+    }
+
+    const headers = values[0];
+    const data = [];
 
     for (let i = 1; i < values.length; i++) {
+      const obj = {};
+      headers.forEach((header, j) => {
+        const cleanedHeader = header.replace(/[^a-zA-Z0-9]/g, '');
+        obj[cleanedHeader] = values[i][j]; // Values only, no formulas
+      });
+      data.push(obj);
+    }
+
+    const jsonStr = JSON.stringify(data);
+    const jsonSize = jsonStr.length;
+    Logger.log(`[DIAG2-${execId}] Processed ${data.length} records`);
+    Logger.log(`[DIAG2-${execId}] JSON size (values only): ${jsonSize} chars`);
+    Logger.log(`[DIAG2-${execId}] First record: ${JSON.stringify(data[0]).substring(0, 200)}`);
+
+    const result = { payload: data };
+    Logger.log(`[DIAG2-${execId}] Returning payload with ${data.length} records (no formulas)`);
+    return result;
+
+  } catch (e) {
+    Logger.log(`[DIAG2-${execId}] Error: ${e.message}`);
+    return { error: e.message };
+  }
+}
+
+/**
+ * DIAGNOSTIC: Test with simple metadata only (no actual data)
+ */
+function testGetAgendaDataCount() {
+  const execId = Utilities.getUuid().substring(0, 8);
+  Logger.log(`[DIAG3-${execId}] Testing with count only`);
+
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONSTANTS.SPREADSHEET_ID);
+    const dataSheet = spreadsheet.getSheetByName(CONSTANTS.DATA_SHEET_NAME);
+    const range = dataSheet.getDataRange();
+    const values = range.getValues();
+
+    const result = {
+      recordCount: values.length - 1,
+      headerCount: values.length > 0 ? values[0].length : 0,
+      timestamp: new Date().toISOString(),
+      message: 'Count test successful'
+    };
+
+    Logger.log(`[DIAG3-${execId}] Returning: ${JSON.stringify(result)}`);
+    return result;
+
+  } catch (e) {
+    Logger.log(`[DIAG3-${execId}] Error: ${e.message}`);
+    return { error: e.message };
+  }
+}
+
+/**
+ * DIAGNOSTIC: Test with first N records (with formulas)
+ */
+function testGetAgendaDataFirstFive() {
+  const execId = Utilities.getUuid().substring(0, 8);
+  Logger.log(`[DIAG4-${execId}] Testing with first 5 records (WITH formulas)`);
+
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONSTANTS.SPREADSHEET_ID);
+    const dataSheet = spreadsheet.getSheetByName(CONSTANTS.DATA_SHEET_NAME);
+    const range = dataSheet.getDataRange();
+    const values = range.getValues();
+    const formulas = range.getFormulas();
+
+    if (values.length <= 1) {
+      Logger.log(`[DIAG4-${execId}] No data rows found`);
+      return { payload: [] };
+    }
+
+    const headers = values[0];
+    const data = [];
+    const maxRows = Math.min(6, values.length); // Header + 5 data rows
+
+    for (let i = 1; i < maxRows; i++) {
       const obj = {};
       const currentRowValues = values[i];
       const currentRowFormulas = formulas[i];
@@ -1171,19 +1363,130 @@ function getAgendaData() {
       data.push(obj);
     }
 
-    Logger.log(`Successfully prepared ${data.length} agenda records.`);
+    const jsonStr = JSON.stringify(data);
+    Logger.log(`[DIAG4-${execId}] Processed ${data.length} records (with formulas)`);
+    Logger.log(`[DIAG4-${execId}] JSON size: ${jsonStr.length} chars`);
+    Logger.log(`[DIAG4-${execId}] First record: ${JSON.stringify(data[0]).substring(0, 200)}`);
 
-    // Return the data wrapped in a 'payload' object, as the client expects.
-    return { payload: data };
+    const result = { payload: data };
+    Logger.log(`[DIAG4-${execId}] Returning payload with ${data.length} records`);
+    return result;
 
   } catch (e) {
-    Logger.log(`ERROR in getAgendaData: ${e.message}`);
-    Logger.log(`Stack trace: ${e.stack}`);
-    // Return an error object that the client can understand.
-    return { error: `Failed to fetch agenda data: ${e.message}` };
+    Logger.log(`[DIAG4-${execId}] Error: ${e.message}`);
+    return { error: e.message };
   }
 }
 
+/**
+ * DIAGNOSTIC: Find the exact breaking point by testing specific row counts
+ */
+function testGetAgendaDataFirstN(n) {
+  const execId = Utilities.getUuid().substring(0, 8);
+  Logger.log(`[DIAG-N-${execId}] Testing with first ${n} records (values only)`);
+
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONSTANTS.SPREADSHEET_ID);
+    const dataSheet = spreadsheet.getSheetByName(CONSTANTS.DATA_SHEET_NAME);
+    const range = dataSheet.getDataRange();
+    const values = range.getValues();
+
+    if (values.length <= 1) {
+      return { payload: [] };
+    }
+
+    const headers = values[0];
+    const data = [];
+    const maxRows = Math.min(n + 1, values.length); // +1 for header
+
+    for (let i = 1; i < maxRows; i++) {
+      const obj = {};
+      headers.forEach((header, j) => {
+        const cleanedHeader = header.replace(/[^a-zA-Z0-9]/g, '');
+        obj[cleanedHeader] = values[i][j];
+      });
+      data.push(obj);
+    }
+
+    const jsonStr = JSON.stringify({ payload: data });
+    Logger.log(`[DIAG-N-${execId}] Processed ${data.length} records, JSON size: ${jsonStr.length} chars`);
+
+    return { payload: data };
+
+  } catch (e) {
+    Logger.log(`[DIAG-N-${execId}] Error: ${e.message}`);
+    return { error: e.message };
+  }
+}
+
+// Specific test functions for different counts
+function testFirst10() { return testGetAgendaDataFirstN(10); }
+function testFirst20() { return testGetAgendaDataFirstN(20); }
+function testFirst25() { return testGetAgendaDataFirstN(25); }
+function testFirst30() { return testGetAgendaDataFirstN(30); }
+function testFirst40() { return testGetAgendaDataFirstN(40); }
+function testFirst50() { return testGetAgendaDataFirstN(50); }
+
+/**
+ * DIAGNOSTIC: Inspect individual record sizes to find problematic records
+ */
+function inspectRecordSizes() {
+  const execId = Utilities.getUuid().substring(0, 8);
+  Logger.log(`[INSPECT-${execId}] Inspecting individual record sizes`);
+
+  try {
+    const spreadsheet = SpreadsheetApp.openById(CONSTANTS.SPREADSHEET_ID);
+    const dataSheet = spreadsheet.getSheetByName(CONSTANTS.DATA_SHEET_NAME);
+    const range = dataSheet.getDataRange();
+    const values = range.getValues();
+
+    if (values.length <= 1) {
+      return { recordSizes: [] };
+    }
+
+    const headers = values[0];
+    const recordSizes = [];
+
+    for (let i = 1; i < values.length; i++) {
+      const obj = {};
+      headers.forEach((header, j) => {
+        const cleanedHeader = header.replace(/[^a-zA-Z0-9]/g, '');
+        obj[cleanedHeader] = values[i][j];
+      });
+
+      const jsonStr = JSON.stringify(obj);
+      const size = jsonStr.length;
+
+      recordSizes.push({
+        index: i,
+        teacher: obj.TeacherLastName || 'Unknown',
+        className: obj.ClassName || 'Unknown',
+        size: size,
+        hasError: jsonStr.includes('ERROR') || jsonStr.includes('Error')
+      });
+
+      Logger.log(`[INSPECT-${execId}] Record ${i}: ${obj.TeacherLastName} - ${obj.ClassName}, size: ${size} chars, hasError: ${jsonStr.includes('ERROR')}`);
+    }
+
+    // Sort by size descending
+    recordSizes.sort((a, b) => b.size - a.size);
+
+    Logger.log(`[INSPECT-${execId}] Largest records:`);
+    recordSizes.slice(0, 10).forEach(r => {
+      Logger.log(`  - Record ${r.index}: ${r.teacher} - ${r.className}, ${r.size} chars, hasError: ${r.hasError}`);
+    });
+
+    return {
+      recordSizes: recordSizes.slice(0, 10), // Return top 10 largest
+      totalRecords: values.length - 1
+    };
+
+  } catch (e) {
+    Logger.log(`[INSPECT-${execId}] Error: ${e.message}`);
+    return { error: e.message };
+  }
+}
+// ========== END DIAGNOSTIC FUNCTIONS ========== */
 
 /**
  * Placeholder function for creating a PDF from selected agenda data.

@@ -597,8 +597,13 @@
 
     function onFailure(error) {
       hideLoadingSkeletons();
-      showMessage(`Error: ${error.message || 'Could not load agendas.'}. Please refresh.`, 'error');
-      console.error('Data fetch error:', error);
+      console.error('=== DATA FETCH FAILURE ===');
+      console.error('Error type:', typeof error);
+      console.error('Error object:', error);
+      console.error('Error message:', error ? error.message : 'No error object');
+      console.error('Error stack:', error ? error.stack : 'No stack trace');
+
+      showMessage(`Error: ${error.message || error || 'Could not load agendas.'}. Please refresh.`, 'error');
       fabContainer.classList.add('hidden');
     }
 
@@ -804,9 +809,47 @@
     }
 
 
+    // --- Test Function to Verify google.script.run ---
+    async function testGoogleScriptRun() {
+      console.log('=== TESTING google.script.run CONNECTION ===');
+
+      // Check if google.script.run is available
+      if (typeof google === 'undefined' || !google.script || !google.script.run) {
+        console.log('google.script.run is NOT available (running in local mode)');
+        return false;
+      }
+
+      try {
+        const testResponse = await new Promise((resolve, reject) => {
+          console.log('Calling testSimpleReturn...');
+          google.script.run
+            .withSuccessHandler((response) => {
+              console.log('testSimpleReturn SUCCESS:', response);
+              resolve(response);
+            })
+            .withFailureHandler((error) => {
+              console.error('testSimpleReturn FAILURE:', error);
+              reject(error);
+            })
+            .testSimpleReturn();
+        });
+
+        console.log('Test function returned:', testResponse);
+        return true;
+      } catch (error) {
+        console.error('Test function failed:', error);
+        return false;
+      }
+    }
+
     // --- Initialization & Event Listeners ---
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       updateDateDisplay();
+
+      // Run test function first to verify google.script.run works
+      console.log('Running test function before main data fetch...');
+      await testGoogleScriptRun();
+      console.log('Test function completed, proceeding with main data fetch...');
 
       const initialButton = document.querySelector(`.grade-button[data-grade="${currentGradeFilter}"]`);
       if (initialButton) {
