@@ -579,9 +579,6 @@
         return;
       } else {
         console.error('Received data in an unexpected format:', response);
-        console.error('Response type:', typeof response);
-        console.error('Is array?', Array.isArray(response));
-        console.error('Has payload?', response && 'payload' in response);
         showMessage('Error: Unexpected data format. Please check browser console and Google Apps Script logs.', 'error');
         fabContainer.classList.add('hidden');
         return;
