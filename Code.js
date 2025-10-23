@@ -1110,14 +1110,35 @@ function doGet() {
  * *** THIS FUNCTION HAS BEEN CORRECTED TO RETURN DATA IN THE EXPECTED FORMAT ***
  */
 function getAgendaData() {
-  const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
-  const DATA_SHEET_NAME = CONSTANTS.DATA_SHEET_NAME;
-
   try {
+    // Validate CONSTANTS is available
+    if (typeof CONSTANTS === 'undefined') {
+      Logger.log('CRITICAL ERROR: CONSTANTS object is undefined. Constants.js may not be loaded.');
+      return { error: 'Configuration error: CONSTANTS not loaded' };
+    }
+
+    const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
+    const DATA_SHEET_NAME = CONSTANTS.DATA_SHEET_NAME;
+
+    // Validate required constants
+    if (!SPREADSHEET_ID) {
+      Logger.log('CRITICAL ERROR: SPREADSHEET_ID is not defined in CONSTANTS.');
+      return { error: 'Configuration error: SPREADSHEET_ID not defined' };
+    }
+
+    if (!DATA_SHEET_NAME) {
+      Logger.log('CRITICAL ERROR: DATA_SHEET_NAME is not defined in CONSTANTS.');
+      return { error: 'Configuration error: DATA_SHEET_NAME not defined' };
+    }
+
+    Logger.log(`getAgendaData called - SPREADSHEET_ID: ${SPREADSHEET_ID}, DATA_SHEET_NAME: ${DATA_SHEET_NAME}`);
+
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
+
     const dataSheet = spreadsheet.getSheetByName(DATA_SHEET_NAME);
     if (!dataSheet) {
-      throw new Error(`Data sheet '${DATA_SHEET_NAME}' not found.`);
+      Logger.log(`ERROR: Data sheet '${DATA_SHEET_NAME}' not found.`);
+      return { error: `Data sheet '${DATA_SHEET_NAME}' not found` };
     }
 
     const range = dataSheet.getDataRange();
@@ -1125,12 +1146,14 @@ function getAgendaData() {
     const formulas = range.getFormulas();
 
     if (values.length <= 1) {
-      Logger.log('No data found in Current_Day_Agendas sheet.');
+      Logger.log('No data rows found in Current_Day_Agendas sheet (only headers or empty).');
       return { payload: [] }; // Return the expected structure with an empty array
     }
 
     const headers = values[0];
     const data = [];
+
+    Logger.log(`Processing ${values.length - 1} rows of data...`);
 
     for (let i = 1; i < values.length; i++) {
       const obj = {};
@@ -1147,12 +1170,15 @@ function getAgendaData() {
       });
       data.push(obj);
     }
-    
+
+    Logger.log(`Successfully prepared ${data.length} agenda records.`);
+
     // Return the data wrapped in a 'payload' object, as the client expects.
     return { payload: data };
 
   } catch (e) {
-    Logger.log(`Error in getAgendaData: ${e.message}`);
+    Logger.log(`ERROR in getAgendaData: ${e.message}`);
+    Logger.log(`Stack trace: ${e.stack}`);
     // Return an error object that the client can understand.
     return { error: `Failed to fetch agenda data: ${e.message}` };
   }
