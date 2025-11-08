@@ -743,7 +743,7 @@
 
             // Return appropriate format for PDF rendering
             if (elements.length === 0) {
-                // No hyperlinks found - pure plain text content
+                // Content is empty or only whitespace
                 return content.replace(/→|!/g, '• ');
             } else if (elements.length === 1 && typeof elements[0] === 'object') {
                 // Single hyperlink only
