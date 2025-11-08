@@ -395,38 +395,42 @@
             const textElement = document.createElement('div');
             textElement.className = 'section-text';
             
-            // Handle HYPERLINK formulas - first extract all complete HYPERLINK formulas, then process remaining text
+            // Handle HYPERLINK formulas and plain text, preserving order and newlines.
             let processedContent = content || 'N/A';
-            
             if (typeof processedContent === 'string') {
-                // Global regex to find all complete HYPERLINK formulas (including multi-line text)
-                const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/gi;
-                const links = [];
-                let remainingContent = processedContent;
+                const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/gi;
+                let lastIndex = 0;
                 let match;
-                
-                // Extract all HYPERLINK formulas
+                const htmlElements = [];
+
                 while ((match = hyperlinkRegex.exec(processedContent)) !== null) {
+                    // 1. Add the plain text before the match
+                    if (match.index > lastIndex) {
+                        htmlElements.push(safeText(processedContent.substring(lastIndex, match.index)));
+                    }
+
+                    // 2. Add the hyperlink itself, with URL sanitization
                     const url = match[1];
                     const linkText = match[2].replace(/""/g, '"');
-                    links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${safeText(linkText)}</a>`);
-                    // Remove this HYPERLINK formula from remaining content
-                    remainingContent = remainingContent.replace(match[0], '').trim();
+                    const safeUrlPattern = /^(https?:\/\/|mailto:|\/|#)/i;
+
+                    if (safeUrlPattern.test(url)) {
+                        htmlElements.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${safeText(linkText)}</a>`);
+                    } else {
+                        // If the URL is not from a safe protocol, render it as plain text to prevent XSS.
+                        htmlElements.push(safeText(linkText));
+                    }
+
+                    lastIndex = match.index + match[0].length;
                 }
-                
-                // Combine processed links with any remaining plain text
-                const allContent = [];
-                if (links.length > 0) {
-                    allContent.push(...links);
+
+                // 3. Add any remaining plain text after the last match
+                if (lastIndex < processedContent.length) {
+                    htmlElements.push(safeText(processedContent.substring(lastIndex)));
                 }
-                if (remainingContent && remainingContent !== '') {
-                    // Split remaining text by newlines and add each non-empty line
-                    const remainingLines = remainingContent.split('\n').filter(line => line.trim());
-                    remainingLines.forEach(line => allContent.push(safeText(line)));
-                }
-                
-                if (allContent.length > 0) {
-                    textElement.innerHTML = allContent.join('<br>');
+
+                if (htmlElements.length > 0) {
+                    textElement.innerHTML = htmlElements.join('');
                 } else {
                     textElement.innerHTML = safeText(processedContent);
                 }
@@ -702,44 +706,52 @@
 
         const processCellContent = (content) => {
             if (!content) return 'N/A';
-            
-            // Extract all complete HYPERLINK formulas first
-            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/gi;
-            const links = [];
-            let remainingContent = content;
+
+            // Helper function to process plain text lines and add to array
+            const addPlainTextLines = (text, targetArray) => {
+                const trimmed = text.trim();
+                if (trimmed) {
+                    const lines = trimmed.split('\n').filter(line => line.trim());
+                    lines.forEach(line => targetArray.push(line.replace(/→|!/g, '• ')));
+                }
+            };
+
+            // Process content sequentially to preserve order of hyperlinks and text
+            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/gi;
+            let lastIndex = 0;
             let match;
-            
-            // Find all HYPERLINK formulas
+            const elements = [];
+
             while ((match = hyperlinkRegex.exec(content)) !== null) {
+                // Add plain text before the match
+                if (match.index > lastIndex) {
+                    addPlainTextLines(content.substring(lastIndex, match.index), elements);
+                }
+
+                // Add the hyperlink
                 const url = match[1];
                 const text = match[2].replace(/""/g, '"').replace(/→|!/g, '• ');
-                links.push({ text, url });
-                // Remove this HYPERLINK formula from remaining content
-                remainingContent = remainingContent.replace(match[0], '').trim();
+                elements.push({ text, url });
+
+                lastIndex = match.index + match[0].length;
             }
-            
-            // Process any remaining plain text
-            const remainingLines = remainingContent ? 
-                remainingContent.split('\n').filter(line => line.trim()).map(line => line.replace(/→|!/g, '• ')) : 
-                [];
-            
-            if (links.length === 1 && remainingLines.length === 0) {
-                // Single hyperlink only - return as object for PDF link functionality
-                return links[0];
-            } else if (links.length > 0 || remainingLines.length > 0) {
-                // Mixed content - return array preserving hyperlink structure and order
-                const mixedContent = [];
-                
-                // To preserve order, we need to reconstruct the content by position
-                // For simplicity, we'll add hyperlinks first, then remaining text
-                // This approach works because HYPERLINK formulas are typically at the start of lines
-                links.forEach(link => mixedContent.push(link));
-                remainingLines.forEach(line => mixedContent.push(line));
-                
-                return mixedContent;
+
+            // Add remaining text after last match
+            if (lastIndex < content.length) {
+                addPlainTextLines(content.substring(lastIndex), elements);
             }
-            
-            return content.replace(/→|!/g, '• ');
+
+            // Return appropriate format for PDF rendering
+            if (elements.length === 0) {
+                // Content is empty or only whitespace
+                return content.replace(/→|!/g, '• ');
+            } else if (elements.length === 1 && typeof elements[0] === 'object') {
+                // Single hyperlink only
+                return elements[0];
+            } else {
+                // Mixed content in correct order
+                return elements;
+            }
         };
 
         const tableData = pdfData.map(agenda => [
