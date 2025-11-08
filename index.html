@@ -395,38 +395,28 @@
             const textElement = document.createElement('div');
             textElement.className = 'section-text';
             
-            // Handle HYPERLINK formulas - first extract all complete HYPERLINK formulas, then process remaining text
+            // Handle HYPERLINK formulas and plain text line-by-line to preserve order
             let processedContent = content || 'N/A';
             
             if (typeof processedContent === 'string') {
-                // Global regex to find all complete HYPERLINK formulas (including multi-line text)
-                const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/gi;
-                const links = [];
-                let remainingContent = processedContent;
-                let match;
+                const lines = processedContent.split('\n').filter(line => line.trim() !== '');
+                const htmlLines = lines.map(line => {
+                    // Regex to capture one HYPERLINK formula per line
+                    const hyperlinkRegex = /^\s*=HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)\s*$/i;
+                    const match = line.trim().match(hyperlinkRegex);
+
+                    if (match) {
+                        const url = match[1];
+                        const linkText = match[2].replace(/""/g, '"'); // Unescape double quotes
+                        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${safeText(linkText)}</a>`;
+                    } else {
+                        // If no match, treat as plain text
+                        return safeText(line);
+                    }
+                });
                 
-                // Extract all HYPERLINK formulas
-                while ((match = hyperlinkRegex.exec(processedContent)) !== null) {
-                    const url = match[1];
-                    const linkText = match[2].replace(/""/g, '"');
-                    links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${safeText(linkText)}</a>`);
-                    // Remove this HYPERLINK formula from remaining content
-                    remainingContent = remainingContent.replace(match[0], '').trim();
-                }
-                
-                // Combine processed links with any remaining plain text
-                const allContent = [];
-                if (links.length > 0) {
-                    allContent.push(...links);
-                }
-                if (remainingContent && remainingContent !== '') {
-                    // Split remaining text by newlines and add each non-empty line
-                    const remainingLines = remainingContent.split('\n').filter(line => line.trim());
-                    remainingLines.forEach(line => allContent.push(safeText(line)));
-                }
-                
-                if (allContent.length > 0) {
-                    textElement.innerHTML = allContent.join('<br>');
+                if (htmlLines.length > 0) {
+                    textElement.innerHTML = htmlLines.join('<br>');
                 } else {
                     textElement.innerHTML = safeText(processedContent);
                 }
