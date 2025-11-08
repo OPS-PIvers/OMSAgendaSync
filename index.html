@@ -707,6 +707,15 @@
         const processCellContent = (content) => {
             if (!content) return 'N/A';
 
+            // Helper function to process plain text lines and add to array
+            const addPlainTextLines = (text, targetArray) => {
+                const trimmed = text.trim();
+                if (trimmed) {
+                    const lines = trimmed.split('\n').filter(line => line.trim());
+                    lines.forEach(line => targetArray.push(line.replace(/→|!/g, '• ')));
+                }
+            };
+
             // Process content sequentially to preserve order of hyperlinks and text
             const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/gi;
             let lastIndex = 0;
@@ -716,11 +725,7 @@
             while ((match = hyperlinkRegex.exec(content)) !== null) {
                 // Add plain text before the match
                 if (match.index > lastIndex) {
-                    const plainText = content.substring(lastIndex, match.index).trim();
-                    if (plainText) {
-                        const lines = plainText.split('\n').filter(line => line.trim());
-                        lines.forEach(line => elements.push(line.replace(/→|!/g, '• ')));
-                    }
+                    addPlainTextLines(content.substring(lastIndex, match.index), elements);
                 }
 
                 // Add the hyperlink
@@ -733,21 +738,20 @@
 
             // Add remaining text after last match
             if (lastIndex < content.length) {
-                const plainText = content.substring(lastIndex).trim();
-                if (plainText) {
-                    const lines = plainText.split('\n').filter(line => line.trim());
-                    lines.forEach(line => elements.push(line.replace(/→|!/g, '• ')));
-                }
+                addPlainTextLines(content.substring(lastIndex), elements);
             }
 
             // Return appropriate format for PDF rendering
-            if (elements.length === 1 && typeof elements[0] === 'object') {
-                return elements[0]; // Single hyperlink
-            } else if (elements.length > 0) {
-                return elements; // Mixed content in correct order
+            if (elements.length === 0) {
+                // No hyperlinks found - pure plain text content
+                return content.replace(/→|!/g, '• ');
+            } else if (elements.length === 1 && typeof elements[0] === 'object') {
+                // Single hyperlink only
+                return elements[0];
+            } else {
+                // Mixed content in correct order
+                return elements;
             }
-
-            return content.replace(/→|!/g, '• ');
         };
 
         const tableData = pdfData.map(agenda => [
