@@ -706,44 +706,52 @@
 
         const processCellContent = (content) => {
             if (!content) return 'N/A';
-            
-            // Extract all complete HYPERLINK formulas first
-            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s?"((?:[^"]|"")*)"\)/gi;
-            const links = [];
-            let remainingContent = content;
+
+            // Helper function to process plain text lines and add to array
+            const addPlainTextLines = (text, targetArray) => {
+                const trimmed = text.trim();
+                if (trimmed) {
+                    const lines = trimmed.split('\n').filter(line => line.trim());
+                    lines.forEach(line => targetArray.push(line.replace(/→|!/g, '• ')));
+                }
+            };
+
+            // Process content sequentially to preserve order of hyperlinks and text
+            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/gi;
+            let lastIndex = 0;
             let match;
-            
-            // Find all HYPERLINK formulas
+            const elements = [];
+
             while ((match = hyperlinkRegex.exec(content)) !== null) {
+                // Add plain text before the match
+                if (match.index > lastIndex) {
+                    addPlainTextLines(content.substring(lastIndex, match.index), elements);
+                }
+
+                // Add the hyperlink
                 const url = match[1];
                 const text = match[2].replace(/""/g, '"').replace(/→|!/g, '• ');
-                links.push({ text, url });
-                // Remove this HYPERLINK formula from remaining content
-                remainingContent = remainingContent.replace(match[0], '').trim();
+                elements.push({ text, url });
+
+                lastIndex = match.index + match[0].length;
             }
-            
-            // Process any remaining plain text
-            const remainingLines = remainingContent ? 
-                remainingContent.split('\n').filter(line => line.trim()).map(line => line.replace(/→|!/g, '• ')) : 
-                [];
-            
-            if (links.length === 1 && remainingLines.length === 0) {
-                // Single hyperlink only - return as object for PDF link functionality
-                return links[0];
-            } else if (links.length > 0 || remainingLines.length > 0) {
-                // Mixed content - return array preserving hyperlink structure and order
-                const mixedContent = [];
-                
-                // To preserve order, we need to reconstruct the content by position
-                // For simplicity, we'll add hyperlinks first, then remaining text
-                // This approach works because HYPERLINK formulas are typically at the start of lines
-                links.forEach(link => mixedContent.push(link));
-                remainingLines.forEach(line => mixedContent.push(line));
-                
-                return mixedContent;
+
+            // Add remaining text after last match
+            if (lastIndex < content.length) {
+                addPlainTextLines(content.substring(lastIndex), elements);
             }
-            
-            return content.replace(/→|!/g, '• ');
+
+            // Return appropriate format for PDF rendering
+            if (elements.length === 0) {
+                // Content is empty or only whitespace
+                return content.replace(/→|!/g, '• ');
+            } else if (elements.length === 1 && typeof elements[0] === 'object') {
+                // Single hyperlink only
+                return elements[0];
+            } else {
+                // Mixed content in correct order
+                return elements;
+            }
         };
 
         const tableData = pdfData.map(agenda => [
