@@ -707,51 +707,57 @@
         const processCellContent = (content) => {
             if (!content) return 'N/A';
 
-            // Helper function to process plain text lines and add to array
-            const addPlainTextLines = (text, targetArray) => {
-                const trimmed = text.trim();
-                if (trimmed) {
-                    const lines = trimmed.split('\n').filter(line => line.trim());
-                    lines.forEach(line => targetArray.push(line.replace(/→|!/g, '• ')));
-                }
-            };
+            // Split by newlines to get paragraphs (backend already structures this way)
+            const paragraphLines = content.split('\n').filter(line => line.trim());
 
-            // Process content sequentially to preserve order of hyperlinks and text
-            const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/gi;
-            let lastIndex = 0;
-            let match;
-            const elements = [];
-
-            while ((match = hyperlinkRegex.exec(content)) !== null) {
-                // Add plain text before the match
-                if (match.index > lastIndex) {
-                    addPlainTextLines(content.substring(lastIndex, match.index), elements);
-                }
-
-                // Add the hyperlink
-                const url = match[1];
-                const text = match[2].replace(/""/g, '"').replace(/→|!/g, '• ');
-                elements.push({ text, url });
-
-                lastIndex = match.index + match[0].length;
-            }
-
-            // Add remaining text after last match
-            if (lastIndex < content.length) {
-                addPlainTextLines(content.substring(lastIndex), elements);
-            }
-
-            // Return appropriate format for PDF rendering
-            if (elements.length === 0) {
-                // Content is empty or only whitespace
+            if (paragraphLines.length === 0) {
                 return content.replace(/→|!/g, '• ');
-            } else if (elements.length === 1 && typeof elements[0] === 'object') {
-                // Single hyperlink only
-                return elements[0];
-            } else {
-                // Mixed content in correct order
-                return elements;
             }
+
+            // Parse each paragraph to extract inline HYPERLINK formulas and plain text
+            const paragraphs = paragraphLines.map(line => {
+                const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/gi;
+                const parts = [];
+                let lastIndex = 0;
+                let match;
+
+                while ((match = hyperlinkRegex.exec(line)) !== null) {
+                    // Add plain text before the hyperlink (if any)
+                    if (match.index > lastIndex) {
+                        const plainText = line.substring(lastIndex, match.index);
+                        if (plainText) {
+                            parts.push(plainText.replace(/→|!/g, '• '));
+                        }
+                    }
+
+                    // Add the hyperlink object
+                    const url = match[1];
+                    const text = match[2].replace(/""/g, '"').replace(/→|!/g, '• ');
+                    parts.push({ text, url });
+
+                    lastIndex = match.index + match[0].length;
+                }
+
+                // Add any remaining plain text after the last hyperlink
+                if (lastIndex < line.length) {
+                    const plainText = line.substring(lastIndex);
+                    if (plainText) {
+                        parts.push(plainText.replace(/→|!/g, '• '));
+                    }
+                }
+
+                // If no parts were found, return the original line as plain text
+                return parts.length > 0 ? parts : [line.replace(/→|!/g, '• ')];
+            });
+
+            // Flatten structure for simple cases
+            if (paragraphs.length === 1 && paragraphs[0].length === 1) {
+                // Single element: return it directly (could be string or hyperlink object)
+                return paragraphs[0][0];
+            }
+
+            // Return array of paragraphs for complex content
+            return paragraphs;
         };
 
         const tableData = pdfData.map(agenda => [
@@ -775,24 +781,46 @@
             columnStyles: { 0: { cellWidth: 1.5 }, 1: { cellWidth: 2 }, 2: { cellWidth: 2.2 }, 3: { cellWidth: 2 }, 4: { cellWidth: 2.2 } },
             
             didParseCell: (data) => {
-                if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
+                if (typeof data.cell.raw === 'string') {
+                    // Plain text only - leave as is
+                    return;
+                } else if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
                     // Single hyperlink object
                     data.cell.text = [data.cell.raw.text];
                     data.cell.styles.textColor = '#0000FF';
                 } else if (Array.isArray(data.cell.raw)) {
-                    // Mixed content array - combine text and mark hyperlinks
-                    const textParts = [];
-                    data.cell.raw.forEach(item => {
-                        if (typeof item === 'object' && item.url) {
-                            textParts.push(item.text);
-                        } else {
-                            textParts.push(item);
+                    // Array of paragraphs, each paragraph is an array of parts
+                    const paragraphTexts = [];
+                    const allHyperlinks = [];
+
+                    data.cell.raw.forEach(paragraph => {
+                        if (!Array.isArray(paragraph)) {
+                            // Shouldn't happen, but handle gracefully
+                            paragraphTexts.push(String(paragraph));
+                            return;
                         }
+
+                        // Build text for this paragraph by joining inline parts
+                        const paragraphParts = [];
+                        paragraph.forEach(part => {
+                            if (typeof part === 'object' && part.url) {
+                                paragraphParts.push(part.text);
+                                allHyperlinks.push(part);
+                            } else {
+                                paragraphParts.push(String(part));
+                            }
+                        });
+
+                        // Join parts within paragraph with no separator (inline)
+                        paragraphTexts.push(paragraphParts.join(''));
                     });
-                    data.cell.text = [textParts.join('\n')];
-                    
-                    // Store hyperlink info for drawing phase
-                    data.cell.hyperlinks = data.cell.raw.filter(item => typeof item === 'object' && item.url);
+
+                    // Join paragraphs with newlines
+                    data.cell.text = paragraphTexts;
+
+                    // Store hyperlink info and paragraph structure for drawing phase
+                    data.cell.hyperlinks = allHyperlinks;
+                    data.cell.paragraphs = data.cell.raw;
                 }
             },
 
@@ -800,17 +828,34 @@
                 if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
                     // Single hyperlink - make entire cell clickable
                     doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: data.cell.raw.url });
-                } else if (Array.isArray(data.cell.raw) && data.cell.hyperlinks && data.cell.hyperlinks.length > 0) {
-                    // Mixed content with hyperlinks - create individual clickable areas
-                    const cellText = data.cell.text[0];
-                    const lineHeight = data.cell.height / cellText.split('\n').length;
+                } else if (Array.isArray(data.cell.raw) && data.cell.paragraphs && data.cell.hyperlinks && data.cell.hyperlinks.length > 0) {
+                    // Multiple paragraphs with hyperlinks
+                    // Calculate line height based on number of paragraphs
+                    const numLines = data.cell.paragraphs.length;
+                    const lineHeight = data.cell.height / numLines;
                     let currentY = data.cell.y;
-                    
-                    data.cell.raw.forEach(item => {
-                        if (typeof item === 'object' && item.url) {
-                            // Create clickable area for this hyperlink
-                            doc.link(data.cell.x, currentY, data.cell.width, lineHeight, { url: item.url });
+
+                    // For each paragraph, check if it contains hyperlinks
+                    data.cell.paragraphs.forEach((paragraph, index) => {
+                        if (!Array.isArray(paragraph)) {
+                            currentY += lineHeight;
+                            return;
                         }
+
+                        // Check if this paragraph contains any hyperlinks
+                        const hasHyperlink = paragraph.some(part => typeof part === 'object' && part.url);
+
+                        if (hasHyperlink) {
+                            // Find the first hyperlink in this paragraph
+                            const firstHyperlink = paragraph.find(part => typeof part === 'object' && part.url);
+                            if (firstHyperlink) {
+                                // Make this line clickable
+                                // Note: For inline hyperlinks, the entire line is clickable
+                                // This is a pragmatic approach since precise text positioning is complex
+                                doc.link(data.cell.x, currentY, data.cell.width, lineHeight, { url: firstHyperlink.url });
+                            }
+                        }
+
                         currentY += lineHeight;
                     });
                 }

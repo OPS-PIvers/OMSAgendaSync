@@ -51,44 +51,103 @@ function getMondayOfCurrentWeek() {
 
 /**
  * Extracts text from a shape while preserving all individual hyperlinks.
- * Returns either plain text or multiple HYPERLINK formulas joined together.
+ * Returns either plain text or a single concatenated formula with HYPERLINK functions and plain text.
+ * Preserves paragraph structure: parts within a paragraph are joined inline (with &),
+ * while different paragraphs are separated by CHAR(10).
  * @param {GoogleAppsScript.Slides.TextRange} textRange The TextRange from a shape.
  * @returns {string} The text content with preserved hyperlinks as HYPERLINK formulas.
  */
 function extractTextWithAllLinks(textRange) {
-  const fullText = textRange.asString().trim();
-  if (fullText === '') {
+  const fullText = textRange.asString();
+  if (fullText.trim() === '') {
     return 'N/A'; // Return a default value for empty text boxes
   }
 
   const runs = textRange.getRuns();
-  const textParts = [];
-  
+  const paragraphs = []; // Array of paragraphs, each paragraph is an array of parts
+  let currentParagraph = [];
+  let hasHyperlink = false;
+
+  // Process each run, detecting paragraph boundaries based on actual newlines
   for (const run of runs) {
     const runText = run.asString();
-    if (runText.trim() === '') continue; // Skip empty runs
-    
+
+    // Split by newlines to detect paragraph boundaries within this run
+    const lines = runText.split('\n');
+
     const link = run.getTextStyle().getLink();
-    if (link && link.getUrl()) {
-      // This run has a hyperlink - create a HYPERLINK formula for it
-      const url = link.getUrl();
-      const linkText = runText.trim();
-      textParts.push(`=HYPERLINK("${url}", "${linkText.replace(/"/g, '""')}")`);
-    } else {
-      // This run has no hyperlink - add as plain text
-      const plainText = runText.trim();
-      if (plainText) {
-        textParts.push(plainText);
+    const isHyperlink = link && link.getUrl();
+
+    if (isHyperlink) hasHyperlink = true;
+
+    // Process each line segment from the split
+    for (let i = 0; i < lines.length; i++) {
+      const lineText = lines[i];
+
+      // Add the text to current paragraph (preserving spacing - don't trim)
+      if (lineText.length > 0) {
+        if (isHyperlink) {
+          currentParagraph.push({
+            type: 'hyperlink',
+            url: link.getUrl(),
+            text: lineText
+          });
+        } else {
+          currentParagraph.push({
+            type: 'plain',
+            text: lineText
+          });
+        }
+      }
+
+      // If not the last segment, we encountered a \n, so start a new paragraph
+      if (i < lines.length - 1) {
+        if (currentParagraph.length > 0) {
+          paragraphs.push(currentParagraph);
+        }
+        currentParagraph = [];
       }
     }
   }
-  
-  if (textParts.length === 0) {
-    return fullText; // Fallback to original text if no parts were processed
+
+  // Add the last paragraph if it has content
+  if (currentParagraph.length > 0) {
+    paragraphs.push(currentParagraph);
   }
-  
-  // Join the parts with newlines for better readability in the spreadsheet
-  return textParts.join('\n');
+
+  // Filter out empty paragraphs
+  const nonEmptyParagraphs = paragraphs.filter(p => p.length > 0);
+
+  if (nonEmptyParagraphs.length === 0) {
+    return fullText.trim() || 'N/A';
+  }
+
+  // If no hyperlinks, just join all text naturally
+  if (!hasHyperlink) {
+    return nonEmptyParagraphs.map(para =>
+      para.map(part => part.text).join('')
+    ).join('\n');
+  }
+
+  // Build concatenated formula with proper paragraph structure
+  const paragraphFormulas = nonEmptyParagraphs.map(paragraph => {
+    const parts = paragraph.map(part => {
+      if (part.type === 'hyperlink') {
+        const escapedText = part.text.replace(/"/g, '""');
+        return `HYPERLINK("${part.url}", "${escapedText}")`;
+      } else {
+        const escapedText = part.text.replace(/"/g, '""');
+        return `"${escapedText}"`;
+      }
+    });
+
+    // Join parts within the same paragraph directly with &
+    // This keeps hyperlinks inline with surrounding text
+    return parts.join(' & ');
+  });
+
+  // Join paragraphs with CHAR(10) for line breaks between paragraphs
+  return '=' + paragraphFormulas.join(' & CHAR(10) & ');
 }
 
 /**
@@ -1106,8 +1165,106 @@ function doGet() {
 }
 
 /**
+ * Helper function to parse concatenated formulas and convert them to web-app-friendly format.
+ * Parses formulas with paragraph structure:
+ * ="part1" & HYPERLINK("url", "part2") & "part3" & CHAR(10) & "next paragraph"
+ * Returns: part1[hyperlinked part2]part3\nnext paragraph
+ * @param {string} formula The formula string to parse
+ * @returns {string} The parsed content with HYPERLINK formulas inline and paragraphs on separate lines
+ */
+function parseConcatenatedFormula(formula) {
+  if (!formula || !formula.startsWith('=')) {
+    return formula;
+  }
+
+  // Remove the leading = sign for easier parsing
+  const formulaContent = formula.substring(1).trim();
+
+  // Split by & CHAR(10) & to separate paragraphs
+  // Use a regex that matches the pattern more reliably
+  const paragraphPattern = /\s*&\s*CHAR\(10\)\s*&\s*/g;
+  const paragraphStrings = formulaContent.split(paragraphPattern);
+
+  const parsedParagraphs = [];
+
+  for (const paragraphStr of paragraphStrings) {
+    const paragraphParts = parseParagraphParts(paragraphStr.trim());
+    if (paragraphParts.length > 0) {
+      parsedParagraphs.push(paragraphParts);
+    }
+  }
+
+  // Join paragraphs with newlines for the web app
+  return parsedParagraphs.map(parts => parts.join('')).join('\n');
+}
+
+/**
+ * Helper function to parse parts within a single paragraph.
+ * Parts are separated by & but should be joined inline (no line breaks).
+ * @param {string} paragraphStr The paragraph formula string
+ * @returns {Array<string>} Array of parsed parts (HYPERLINK formulas or plain text)
+ */
+function parseParagraphParts(paragraphStr) {
+  const parts = [];
+  let remaining = paragraphStr;
+
+  while (remaining.length > 0) {
+    remaining = remaining.trim();
+
+    // Check if it starts with HYPERLINK
+    if (remaining.startsWith('HYPERLINK(')) {
+      const hyperlinkMatch = remaining.match(/^HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/);
+      if (hyperlinkMatch) {
+        // Add as HYPERLINK formula for the web app to parse
+        parts.push(`=HYPERLINK("${hyperlinkMatch[1]}", "${hyperlinkMatch[2]}")`);
+        remaining = remaining.substring(hyperlinkMatch[0].length).trim();
+      } else {
+        // Malformed HYPERLINK, skip it
+        break;
+      }
+    }
+    // Check if it starts with a quoted string
+    else if (remaining.startsWith('"')) {
+      let endIndex = 1;
+      while (endIndex < remaining.length) {
+        if (remaining[endIndex] === '"') {
+          // Check if it's an escaped quote ""
+          if (endIndex + 1 < remaining.length && remaining[endIndex + 1] === '"') {
+            endIndex += 2;
+            continue;
+          } else {
+            break;
+          }
+        }
+        endIndex++;
+      }
+
+      if (endIndex < remaining.length) {
+        const quotedText = remaining.substring(1, endIndex);
+        const unescapedText = quotedText.replace(/""/g, '"');
+        parts.push(unescapedText);
+        remaining = remaining.substring(endIndex + 1).trim();
+      } else {
+        break;
+      }
+    }
+    // Skip & concatenation operators
+    else if (remaining.startsWith('&')) {
+      remaining = remaining.substring(1).trim();
+    }
+    else {
+      // Unknown pattern, stop parsing this paragraph
+      break;
+    }
+  }
+
+  return parts;
+}
+
+/**
  * Fetches the agenda data from the 'Current_Day_Agendas' sheet.
- * *** THIS FUNCTION HAS BEEN CORRECTED TO RETURN DATA IN THE EXPECTED FORMAT ***
+ * Reads formulas to preserve HYPERLINK functions and parses concatenated formulas
+ * to ensure the web app can render hyperlinks correctly.
  */
 function getAgendaData() {
   const execId = Utilities.getUuid().substring(0, 8);
@@ -1137,6 +1294,7 @@ function getAgendaData() {
 
     const range = dataSheet.getDataRange();
     const values = range.getValues();
+    const formulas = range.getFormulas();
 
     if (values.length <= 1) {
       Logger.log(`[${execId}] No data rows found`);
@@ -1149,26 +1307,37 @@ function getAgendaData() {
     for (let i = 1; i < values.length; i++) {
       const obj = {};
       const currentRowValues = values[i];
+      const currentRowFormulas = formulas[i];
 
       headers.forEach((header, j) => {
         const cleanedHeader = header.replace(/[^a-zA-Z0-9]/g, '');
-        let value = currentRowValues[j];
+        let value;
 
-        // Force conversion to string to handle Date objects, numbers, and other non-primitive types
-        // that Google Sheets might auto-format (e.g., "3-4" interpreted as a number or date)
-        if (value instanceof Date) {
-          // Convert Date objects to readable string format
-          value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'M/d/yyyy');
-        } else if (value !== null && value !== undefined) {
-          // Convert everything else to string explicitly
-          value = String(value);
+        // Prefer formula over value if formula exists
+        if (currentRowFormulas[j]) {
+          const formula = currentRowFormulas[j];
+          // If it's a concatenated formula, parse it for the web app
+          if (formula.includes('HYPERLINK') && formula.includes('&')) {
+            value = parseConcatenatedFormula(formula);
+          } else {
+            // Regular formula (single HYPERLINK or other)
+            value = formula;
+          }
         } else {
-          // Handle null/undefined as empty string
-          value = '';
+          value = currentRowValues[j];
+
+          // Force conversion to string to handle Date objects, numbers, and other non-primitive types
+          if (value instanceof Date) {
+            value = Utilities.formatDate(value, Session.getScriptTimeZone(), 'M/d/yyyy');
+          } else if (value !== null && value !== undefined) {
+            value = String(value);
+          } else {
+            value = '';
+          }
         }
 
         // Truncate long error messages to reduce payload size
-        if (value.length > 100 && (value.includes('Error:') || value.includes('ERROR'))) {
+        if (typeof value === 'string' && value.length > 100 && (value.includes('Error:') || value.includes('ERROR'))) {
           value = 'Error loading agenda data';
         }
 
