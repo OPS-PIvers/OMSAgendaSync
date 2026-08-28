@@ -63,59 +63,61 @@ function extractTextWithAllLinks(textRange) {
     return 'N/A'; // Return a default value for empty text boxes
   }
 
-  const runs = textRange.getRuns();
   const paragraphs = []; // Array of paragraphs, each paragraph is an array of parts
-  let currentParagraph = [];
   let hasHyperlink = false;
 
-  // Process each run, detecting paragraph boundaries based on actual newlines
-  for (const run of runs) {
-    const runText = run.asString();
+  // Walk actual paragraphs so list formatting (bullets, nesting) survives.
+  textRange.getParagraphs().forEach(paragraph => {
+    const range = paragraph.getRange();
+    if (!range) return;
 
-    // Split by newlines to detect paragraph boundaries within this run
-    const lines = runText.split('\n');
+    const paragraphText = range.asString();
+    if (paragraphText.trim() === '') return;
 
-    const link = run.getTextStyle().getLink();
-    const isHyperlink = link && link.getUrl();
+    const parts = [];
 
-    if (isHyperlink) hasHyperlink = true;
-
-    // Process each line segment from the split
-    for (let i = 0; i < lines.length; i++) {
-      const lineText = lines[i];
-
-      // Add the text to current paragraph (preserving spacing - don't trim)
-      if (lineText.length > 0) {
-        if (isHyperlink) {
-          currentParagraph.push({
-            type: 'hyperlink',
-            url: link.getUrl(),
-            text: lineText
-          });
-        } else {
-          currentParagraph.push({
-            type: 'plain',
-            text: lineText
-          });
-        }
+    // Encode bullet/nesting as a literal text prefix so it survives the
+    // sheet round-trip without any special protocol.
+    try {
+      const listStyle = range.getListStyle();
+      if (listStyle && listStyle.isInList()) {
+        const level = listStyle.getNestingLevel() || 0;
+        parts.push({ type: 'plain', text: '  '.repeat(level) + '• ' });
       }
-
-      // If not the last segment, we encountered a \n, so start a new paragraph
-      if (i < lines.length - 1) {
-        if (currentParagraph.length > 0) {
-          paragraphs.push(currentParagraph);
-        }
-        currentParagraph = [];
-      }
+    } catch (e) {
+      // List info unavailable — fall through to plain text.
     }
-  }
 
-  // Add the last paragraph if it has content
-  if (currentParagraph.length > 0) {
-    paragraphs.push(currentParagraph);
-  }
+    range.getRuns().forEach(run => {
+      const runText = run.asString().replace(/\n/g, '');
+      if (runText.length === 0) return;
 
-  // Filter out empty paragraphs
+      const link = run.getTextStyle().getLink();
+      const url = link && link.getUrl();
+
+      if (url) {
+        hasHyperlink = true;
+        const prev = parts[parts.length - 1];
+        if (prev && prev.type === 'hyperlink' && prev.url === url) {
+          prev.text += runText; // merge adjacent runs of the same link
+        } else {
+          parts.push({ type: 'hyperlink', url: url, text: runText });
+        }
+      } else {
+        const prev = parts[parts.length - 1];
+        if (prev && prev.type === 'plain') {
+          prev.text += runText; // merge adjacent plain runs (bold/italic splits)
+        } else {
+          parts.push({ type: 'plain', text: runText });
+        }
+      }
+    });
+
+    if (parts.length > 0) {
+      paragraphs.push(parts);
+    }
+  });
+
   const nonEmptyParagraphs = paragraphs.filter(p => p.length > 0);
 
   if (nonEmptyParagraphs.length === 0) {
@@ -134,7 +136,10 @@ function extractTextWithAllLinks(textRange) {
     const parts = paragraph.map(part => {
       if (part.type === 'hyperlink') {
         const escapedText = part.text.replace(/"/g, '""');
-        return `HYPERLINK("${part.url}", "${escapedText}")`;
+        // Quotes are illegal in URLs anyway — percent-encode them so they
+        // can't terminate the formula string early.
+        const safeUrl = part.url.replace(/"/g, '%22');
+        return `HYPERLINK("${safeUrl}", "${escapedText}")`;
       } else {
         const escapedText = part.text.replace(/"/g, '""');
         return `"${escapedText}"`;

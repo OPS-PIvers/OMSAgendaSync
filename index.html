@@ -6,23 +6,60 @@
   <base target="_top">
   <title>Daily Teacher Agendas</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
   <style>
+    :root {
+      /* OPS Tech brand tokens */
+      --ops-blue-dark: #1d2a5d;
+      --ops-blue: #2d3f89;
+      --ops-blue-light: #4356a9;
+      --ops-blue-lighter: #eaecf5;
+      --ops-blue-hover: #253473;
+      --ops-blue-50: #f4f6fa;
+      --ops-red-dark: #7a1718;
+      --ops-red: #ad2122;
+      --ops-red-light: #c13435;
+      --ops-red-lighter: #e5c7c7;
+      --ops-red-hover: #941c1d;
+      --ops-gray-dark: #333333;
+      --ops-gray: #666666;
+      --ops-gray-light: #999999;
+      --ops-gray-lighter: #cccccc;
+      --ops-gray-lightest: #f3f3f3;
+      /* Extended subject palette — deep, muted hues in the same register
+         as the OPS brand blue/red (kept off official materials' chrome) */
+      --ops-teal: #1d5d57;
+      --ops-teal-lighter: #e7f0ee;
+      --ops-teal-border: #c2d9d5;
+      --ops-gold: #8a621a;
+      --ops-gold-lighter: #f5efe1;
+      --ops-gold-border: #e0d3b4;
+      --ops-plum: #5b3a83;
+      --ops-plum-lighter: #eee9f4;
+      --ops-plum-border: #d4c8e3;
+      --ops-font-heading: "Lexend", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --ops-font-body: "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    }
+
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: #f8fafc;
-      color: #1f2937;
+      font-family: var(--ops-font-body);
+      background-color: #fafafa;
+      color: var(--ops-gray-dark);
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--ops-font-heading);
     }
 
     /* --- Grade Navigation Tabs --- */
     .grade-nav-container {
       position: relative;
-      background-color: #e5e7eb;
+      background-color: var(--ops-blue-lighter);
       border-radius: 9999px;
       padding: 0.25rem;
       display: flex;
@@ -37,7 +74,8 @@
       border-radius: 9999px;
       border: none;
       background-color: transparent;
-      color: #4b5563;
+      color: var(--ops-blue);
+      font-family: var(--ops-font-heading);
       font-weight: 600;
       cursor: pointer;
       transition: color 0.3s ease;
@@ -49,7 +87,7 @@
     }
     
     .grade-button:not(.active):hover {
-        color: #1f2937;
+        color: var(--ops-blue-dark);
     }
 
     #active-grade-pill {
@@ -57,13 +95,27 @@
       top: 0.25rem;
       bottom: 0.25rem;
       border-radius: 9999px;
-      transition: left 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55), width 0.4s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+      transition: left 0.3s cubic-bezier(0.22, 1, 0.36, 1), width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
     }
     
-    /* --- Grade Specific Colors --- */
-    .bg-grade-6th { background-color: #6366f1; } /* Indigo-500 */
-    .bg-grade-7th { background-color: #14b8a6; } /* Teal-500 */
-    .bg-grade-8th { background-color: #a855f7; } /* Purple-500 */
+    /* --- Grade Specific Colors (OPS palette + extended teal) --- */
+    .bg-grade-6th { background-color: var(--ops-blue); }
+    .bg-grade-7th { background-color: var(--ops-red); }
+    .bg-grade-8th { background-color: var(--ops-teal); }
+
+    /* --- Subject color coding (extended OPS family) --- */
+    .subject-header-math    { color: var(--ops-blue-dark); }
+    .agenda-card.subject-card-math      { background-color: var(--ops-blue-lighter); border-color: #c0c7e0; }
+    .subject-header-english { color: var(--ops-red-dark); }
+    .agenda-card.subject-card-english   { background-color: #f5e3e3; border-color: var(--ops-red-lighter); }
+    .subject-header-science { color: var(--ops-teal); }
+    .agenda-card.subject-card-science   { background-color: var(--ops-teal-lighter); border-color: var(--ops-teal-border); }
+    .subject-header-social  { color: var(--ops-gold); }
+    .agenda-card.subject-card-social    { background-color: var(--ops-gold-lighter); border-color: var(--ops-gold-border); }
+    .subject-header-explore { color: var(--ops-plum); }
+    .agenda-card.subject-card-explore   { background-color: var(--ops-plum-lighter); border-color: var(--ops-plum-border); }
+    .subject-header-default { color: var(--ops-gray-dark); }
+    .agenda-card.subject-card-default   { background-color: #ffffff; border-color: #e0e0e0; }
 
     /* --- Smart Card Layout --- */
     .agenda-card {
@@ -87,26 +139,45 @@
     }
 
     .section-label {
+        font-family: var(--ops-font-body);
         font-size: 0.75rem;
-        font-weight: 600;
+        font-weight: 500;
+        letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: #9ca3af;
+        color: var(--ops-gray);
         margin-bottom: 0.25rem;
     }
 
     .section-text {
         font-size: 0.9rem;
-        color: #374151;
+        color: var(--ops-gray-dark);
         line-height: 1.5;
         max-height: 4.5em; /* Approx 3 lines */
         overflow: hidden;
         text-overflow: ellipsis;
         position: relative;
-        transition: max-height 0.3s ease-in-out;
         /* Allow word breaks for long links */
         word-break: break-word;
     }
     
+    .agenda-list {
+        list-style: none;
+        padding-left: 0.25rem;
+        margin: 0.15rem 0;
+    }
+    .agenda-list li {
+        position: relative;
+        padding-left: 1rem;
+        margin-bottom: 0.15rem;
+    }
+    .agenda-list li::before {
+        content: '•';
+        position: absolute;
+        left: 0;
+        color: var(--ops-blue);
+        font-weight: 700;
+    }
+
     .agenda-card.expanded .section-text {
         max-height: 500px; /* A large value to allow full expansion */
     }
@@ -114,7 +185,7 @@
     .show-more-btn {
         font-size: 0.8rem;
         font-weight: 600;
-        color: #4f46e5;
+        color: var(--ops-blue);
         cursor: pointer;
         margin-top: 0.5rem;
         background: none;
@@ -147,7 +218,7 @@
       font-size: 1.25rem;
       color: white;
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-      transition: all 0.3s ease;
+      transition: transform 0.2s ease-out, box-shadow 0.2s ease-out, background-color 0.2s ease-out;
       cursor: pointer;
       border: none;
     }
@@ -156,8 +227,10 @@
       box-shadow: 0 6px 16px rgba(0,0,0,0.25);
     }
     
-    .print-fab { background-color: #3b82f6; } /* Blue-500 */
-    .pdf-fab { background-color: #8b5cf6; } /* Violet-500 */
+    .print-fab { background-color: var(--ops-blue); }
+    .print-fab:hover { background-color: var(--ops-blue-hover); }
+    .pdf-fab { background-color: var(--ops-red); }
+    .pdf-fab:hover { background-color: var(--ops-red-hover); }
     
     /* --- Skeleton Loader --- */
     .skeleton-row {
@@ -189,6 +262,9 @@
         max-height: none !important; /* Ensure all text prints */
       }
     }
+
+    /* OPS link color (beats Tailwind's .text-blue-600 utility) */
+    .section-text a.text-blue-600 { color: var(--ops-blue); }
   </style>
 </head>
 <body class="antialiased">
@@ -197,31 +273,35 @@
     <!-- Header -->
     <header class="text-center mb-8 no-print">
       <div class="flex items-center justify-center gap-4 mb-4">
-        <h1 class="text-4xl md:text-5xl font-extrabold text-gray-800 tracking-tight">OMS Daily Snapshot</h1>
-        <button id="archive-button" class="text-gray-600 hover:text-gray-800 transition-colors" aria-label="View Past Agendas" title="View Past Agendas">
+        <h1 class="text-4xl md:text-5xl font-bold tracking-tight" style="color: var(--ops-blue-dark);">OMS Daily Snapshot</h1>
+        <button id="archive-button" class="transition-colors" style="color: var(--ops-blue);" aria-label="View Past Agendas" title="View Past Agendas">
           <i class="fas fa-calendar-alt text-2xl"></i>
         </button>
       </div>
       <div class="flex items-center justify-center gap-2">
-        <p id="current-date" class="text-lg text-gray-500"></p>
-        <button id="back-to-today" class="hidden px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded-full hover:bg-blue-200 transition-colors">
+        <p id="current-date" class="text-lg" style="color: var(--ops-gray);"></p>
+        <button id="back-to-today" class="hidden px-3 py-1 text-sm rounded-full transition-colors" style="background-color: var(--ops-blue-lighter); color: var(--ops-blue-dark);">
           Back to Today
         </button>
       </div>
     </header>
 
     <!-- Grade Level Navigation -->
-    <nav class="mb-8 flex justify-center no-print">
-      <div id="grade-nav" class="grade-nav-container">
+    <nav class="mb-8 flex flex-wrap items-center justify-center gap-3 no-print">
+      <div id="grade-nav" class="grade-nav-container" style="margin: 0;">
         <div id="active-grade-pill"></div>
         <button class="grade-button" data-grade="6th Grade">6th Grade</button>
         <button class="grade-button" data-grade="7th Grade">7th Grade</button>
         <button class="grade-button" data-grade="8th Grade">8th Grade</button>
       </div>
+      <button id="calendar-app-button" class="inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-white shadow-sm transition-colors whitespace-nowrap" style="background-color: var(--ops-blue); font-family: var(--ops-font-heading);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
+        <i class="fas fa-calendar-check"></i>
+        OMS Assessment Calendar
+      </button>
     </nav>
 
     <!-- Disclaimer -->
-    <div class="no-print max-w-4xl mx-auto mb-6 px-4 py-3 bg-yellow-100 border border-yellow-400 text-yellow-800 rounded-lg text-center text-sm">
+    <div class="no-print max-w-4xl mx-auto mb-6 px-5 py-3 rounded-lg text-sm" style="background-color: var(--ops-blue-lighter); border-left: 3px solid var(--ops-blue); color: var(--ops-gray-dark); text-align: left;">
       <p>This page is updated periodically throughout the day. Please keep in mind that all items are flexible and may be adjusted by the teacher to best support student learning.</p>
     </div>
     
@@ -263,7 +343,7 @@
       </div>
       <div class="mt-8 flex justify-end gap-4">
         <button id="cancel-pdf-button" class="px-6 py-2 rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Cancel</button>
-        <button id="generate-pdf-button" class="px-6 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-2">
+        <button id="generate-pdf-button" class="px-6 py-2 rounded-md text-white flex items-center gap-2" style="background-color: var(--ops-blue);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
           <i class="fas fa-file-alt"></i>
           Generate PDF
         </button>
@@ -285,7 +365,7 @@
       </div>
       <div class="flex justify-end gap-4">
         <button id="cancel-archive-button" class="px-6 py-2 rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Cancel</button>
-        <button id="view-archive-button" class="px-6 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 flex items-center gap-2">
+        <button id="view-archive-button" class="px-6 py-2 rounded-md text-white flex items-center gap-2" style="background-color: var(--ops-blue);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
           <i class="fas fa-calendar-check"></i>
           View Archive
         </button>
@@ -311,6 +391,14 @@
     const printButton = document.getElementById('print-button');
     const pdfButton = document.getElementById('pdf-button');
     const archiveButton = document.getElementById('archive-button');
+    const calendarAppButton = document.getElementById('calendar-app-button');
+    calendarAppButton.addEventListener('click', () => {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const month = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+        const day = `${month}-${pad(now.getDate())}`;
+        window.open(`https://script.google.com/macros/s/AKfycbz69EEYO818k-y86hM5QyaSTBCu6nrdrfjSYZPZqnmtelb0vk3fQH8ZJrU3EwihfNdpjA/exec?view=calendar&month=${month}&day=${day}`, '_blank');
+    });
     const backToTodayButton = document.getElementById('back-to-today');
 
     // --- UI Update Functions ---
@@ -371,74 +459,118 @@
     
     function getSubjectColors(className = '') {
         const name = className.toLowerCase();
-        if (name.includes('math') || name.includes('algebra') || name.includes('geometry')) return { headerClass: 'text-blue-800', cardClasses: 'bg-blue-50 border-blue-200' };
-        if (name.includes('english') || name.includes('reading') || name.includes('language')) return { headerClass: 'text-red-800', cardClasses: 'bg-red-50 border-red-200' };
-        if (name.includes('science')) return { headerClass: 'text-green-800', cardClasses: 'bg-green-50 border-green-200' };
-        if (name.includes('social') || name.includes('history') || name.includes('global')) return { headerClass: 'text-yellow-800', cardClasses: 'bg-yellow-50 border-yellow-200' };
-        if (name.includes('exploratory') || name.includes('art') || name.includes('music') || name.includes('tech') || name.includes('band') || name.includes('computer') || name.includes('robotics') || name.includes('design') || name.includes('solar') || name.includes('technology') || name.includes('spanish') || name.includes('phy ed') || name.includes('health')) return { headerClass: 'text-purple-800', cardClasses: 'bg-purple-50 border-purple-200' };
-        return { headerClass: 'text-gray-800', cardClasses: 'bg-white border-gray-200' };
+        if (name.includes('math') || name.includes('algebra') || name.includes('geometry')) return { headerClass: 'subject-header-math', cardClasses: 'subject-card-math' };
+        if (name.includes('english') || name.includes('reading') || name.includes('language')) return { headerClass: 'subject-header-english', cardClasses: 'subject-card-english' };
+        if (name.includes('science')) return { headerClass: 'subject-header-science', cardClasses: 'subject-card-science' };
+        if (name.includes('social') || name.includes('history') || name.includes('global')) return { headerClass: 'subject-header-social', cardClasses: 'subject-card-social' };
+        if (name.includes('exploratory') || name.includes('art') || name.includes('music') || name.includes('tech') || name.includes('band') || name.includes('computer') || name.includes('robotics') || name.includes('design') || name.includes('solar') || name.includes('technology') || name.includes('spanish') || name.includes('phy ed') || name.includes('health')) return { headerClass: 'subject-header-explore', cardClasses: 'subject-card-explore' };
+        return { headerClass: 'subject-header-default', cardClasses: 'subject-card-default' };
+    }
+
+    // --- Rich text rendering (HYPERLINK formulas, bullets, bare URLs) ---
+
+    function escapeHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function makeLink(url, text) {
+        const safeUrlPattern = /^(https?:\/\/|mailto:|\/|#)/i;
+        if (!safeUrlPattern.test(url)) {
+            // Unsafe protocol — render the text only, never the raw formula.
+            return escapeHtml(text);
+        }
+        return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${escapeHtml(text)}</a>`;
+    }
+
+    // Escape plain text and auto-link any bare URLs it contains.
+    function renderPlainSegment(text) {
+        const urlRegex = /https?:\/\/[^\s<>"']+/g;
+        let html = '';
+        let last = 0;
+        let match;
+        while ((match = urlRegex.exec(text)) !== null) {
+            html += escapeHtml(text.substring(last, match.index));
+            // Trim trailing punctuation that's almost never part of the URL
+            const url = match[0].replace(/[.,;:)\]]+$/, '');
+            html += makeLink(url, url);
+            last = match.index + url.length;
+        }
+        html += escapeHtml(text.substring(last));
+        return html.replace(/→/g, '<span class="mr-1" style="color: var(--ops-red);">→</span>');
+    }
+
+    // Convert one line of cell content to inline HTML, resolving HYPERLINK
+    // formulas. Tolerant of malformed/partial formulas: anything that still
+    // looks like HYPERLINK(...) is salvaged as a link or plain text rather
+    // than shown raw.
+    function renderInline(line) {
+        const hyperlinkRegex = /=?HYPERLINK\(\s*"([^"]*)"\s*,\s*"((?:[^"]|"")*)"\s*\)/gi;
+        let html = '';
+        let last = 0;
+        let match;
+        while ((match = hyperlinkRegex.exec(line)) !== null) {
+            if (match.index > last) {
+                html += renderPlainSegment(line.substring(last, match.index));
+            }
+            html += makeLink(match[1], match[2].replace(/""/g, '"'));
+            last = match.index + match[0].length;
+        }
+        let remainder = line.substring(last);
+        // Salvage a malformed HYPERLINK fragment: show its readable pieces
+        // instead of raw formula syntax.
+        if (/=?HYPERLINK\(/i.test(remainder)) {
+            remainder = remainder.replace(/=?HYPERLINK\(\s*"?([^",)]*)"?[^)]*\)?/gi, (m, url) => {
+                return /^https?:\/\//i.test(url) ? '' : url;
+            });
+        }
+        html += renderPlainSegment(remainder);
+        return html;
+    }
+
+    // Render full cell content: paragraphs on newlines; consecutive lines
+    // starting with a bullet glyph become a real <ul>.
+    function renderRichText(content) {
+        const text = (content == null || content === '') ? 'N/A' : String(content);
+        const lines = text.split('\n');
+        const bulletRegex = /^(\s*)[•▪◦‣∙·-]\s+/;
+        let html = '';
+        let listOpen = false;
+
+        lines.forEach(line => {
+            const bulletMatch = line.match(bulletRegex);
+            if (bulletMatch) {
+                if (!listOpen) { html += '<ul class="agenda-list">'; listOpen = true; }
+                const indentLevel = Math.floor(bulletMatch[1].length / 2);
+                const itemText = line.replace(bulletRegex, '');
+                html += `<li style="margin-left: ${indentLevel * 1}rem;">${renderInline(itemText)}</li>`;
+            } else {
+                if (listOpen) { html += '</ul>'; listOpen = false; }
+                if (line.trim() !== '') {
+                    html += `<div>${renderInline(line)}</div>`;
+                }
+            }
+        });
+        if (listOpen) html += '</ul>';
+        return html || escapeHtml(text);
     }
 
     function createAgendaCard(agenda) {
         const card = document.createElement('div');
         card.className = 'agenda-card';
 
-        const safeText = (text) => {
-            const stringText = (text == null) ? 'N/A' : String(text);
-            return stringText.replace(/\n/g, '<br>').replace(/→/g, '<span class="mr-2 text-indigo-500">→</span>');
-        };
-
         const createSection = (label, content) => {
             const section = document.createElement('div');
             section.className = 'content-section';
-            
+
             const textElement = document.createElement('div');
             textElement.className = 'section-text';
-            
-            // Handle HYPERLINK formulas and plain text, preserving order and newlines.
-            let processedContent = content || 'N/A';
-            if (typeof processedContent === 'string') {
-                const hyperlinkRegex = /=HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/gi;
-                let lastIndex = 0;
-                let match;
-                const htmlElements = [];
+            textElement.innerHTML = renderRichText(content);
 
-                while ((match = hyperlinkRegex.exec(processedContent)) !== null) {
-                    // 1. Add the plain text before the match
-                    if (match.index > lastIndex) {
-                        htmlElements.push(safeText(processedContent.substring(lastIndex, match.index)));
-                    }
-
-                    // 2. Add the hyperlink itself, with URL sanitization
-                    const url = match[1];
-                    const linkText = match[2].replace(/""/g, '"');
-                    const safeUrlPattern = /^(https?:\/\/|mailto:|\/|#)/i;
-
-                    if (safeUrlPattern.test(url)) {
-                        htmlElements.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">${safeText(linkText)}</a>`);
-                    } else {
-                        // If the URL is not from a safe protocol, render it as plain text to prevent XSS.
-                        htmlElements.push(safeText(linkText));
-                    }
-
-                    lastIndex = match.index + match[0].length;
-                }
-
-                // 3. Add any remaining plain text after the last match
-                if (lastIndex < processedContent.length) {
-                    htmlElements.push(safeText(processedContent.substring(lastIndex)));
-                }
-
-                if (htmlElements.length > 0) {
-                    textElement.innerHTML = htmlElements.join('');
-                } else {
-                    textElement.innerHTML = safeText(processedContent);
-                }
-            } else {
-                textElement.innerHTML = safeText(processedContent);
-            }
-
-            section.innerHTML = `<h3 class="section-label">${label}</h3>`;
+            section.innerHTML = `<h3 class="section-label">${escapeHtml(label)}</h3>`;
             section.appendChild(textElement);
             
             setTimeout(() => {
@@ -515,8 +647,8 @@
            console.warn("Running in local development mode. Using mock data.");
            // Mock data for local testing when not on Google Apps Script
            const mockResponse = [
-                { GradeLevel: '6th Grade', ClassName: 'Math 6', TeacherLastName: 'Newton', TurnIn: 'Unit 1 Review', Activities: 'Group work on fractions.', PracticeWork: '=HYPERLINK("https://example.com/math-hw", "Complete worksheet 2.3")', Upcoming: 'Quiz on Friday' },
-                { GradeLevel: '6th Grade', ClassName: 'Science 6', TeacherLastName: 'Curie', TurnIn: 'Lab Report', Activities: 'Cell observation under microscope.', PracticeWork: 'Read Chapter 4', Upcoming: 'Project due next week' },
+                { GradeLevel: '6th Grade', ClassName: 'Math 6', TeacherLastName: 'Newton', TurnIn: 'Unit 1 Review', Activities: '• Warm-up problems\n• Group work on fractions with =HYPERLINK("https://example.com/guide", "the fraction guide")\n  • Partner check-in\nWrap-up discussion', PracticeWork: '=HYPERLINK("https://example.com/math-hw", "Complete worksheet 2.3")\nAlso see https://example.com/extra-practice for extra help', Upcoming: 'Quiz on Friday' },
+                { GradeLevel: '6th Grade', ClassName: 'Science 6', TeacherLastName: 'Curie', TurnIn: 'Lab Report', Activities: 'Cell observation under microscope.', PracticeWork: 'Read Chapter 4 =HYPERLINK("https://example.com/broken", "unclosed link', Upcoming: 'Project due next week' },
                 { GradeLevel: '7th Grade', ClassName: 'English 7', TeacherLastName: 'Austen', TurnIn: 'Essay Draft', Activities: 'Peer review session.', PracticeWork: 'Finalize essay.', Upcoming: 'Book report on "The Giver"' },
             ];
            onSuccess(mockResponse);
@@ -775,7 +907,7 @@
             body: tableData,
             theme: 'grid',
             margin: { left: pageMargin },
-            headStyles: { fillColor: [59, 130, 246] },
+            headStyles: { fillColor: [45, 63, 137] },
             styles: { fontSize: 9, cellPadding: 0.08, valign: 'top', lineColor: [209, 213, 219], lineWidth: 0.01 },
             // *** THIS LINE WAS CORRECTED ***
             columnStyles: { 0: { cellWidth: 1.5 }, 1: { cellWidth: 2 }, 2: { cellWidth: 2.2 }, 3: { cellWidth: 2 }, 4: { cellWidth: 2.2 } },
@@ -787,7 +919,7 @@
                 } else if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
                     // Single hyperlink object
                     data.cell.text = [data.cell.raw.text];
-                    data.cell.styles.textColor = '#0000FF';
+                    data.cell.styles.textColor = '#2d3f89';
                 } else if (Array.isArray(data.cell.raw)) {
                     // Array of paragraphs, each paragraph is an array of parts
                     const paragraphTexts = [];
