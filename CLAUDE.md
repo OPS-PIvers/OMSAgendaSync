@@ -49,22 +49,45 @@ The application uses precise coordinate matching to extract text from specific a
 
 ## Development Commands
 
-### Deployment Process (from GEMINI.md)
-After any code changes, follow this sequence:
+### Deployment Process
+
+Deployment is automated. Pushing to `main` triggers
+`.github/workflows/deploy.yml`, which runs `clasp push`, creates a script
+version described by the head commit, points the live web app deployment at
+that version, and fails the job if the deployment did not actually move.
 
 ```bash
-# Stage and commit changes
 git add .
 git commit -m "FEAT: Your descriptive commit message here"
-
-# Push to remote repository
 git push
+```
 
-# Deploy to Google Apps Script
+The workflow only fires when `Code.js`, `Constants.js`, `index.html`,
+`appsscript.json`, `.clasp.json`, `.claspignore`, or the workflow file itself
+changes. To run it by hand:
+
+```bash
+gh workflow run "Deploy to Apps Script" --repo OPS-PIvers/OMSAgendaSync
+```
+
+It authenticates with the `CLASPRC_JSON` repository secret, which holds the
+contents of a local `~/.clasprc.json`. If deploys start failing at the
+"Authenticate clasp" step, that token was revoked or expired — run `clasp login`
+locally, then re-upload it (PowerShell):
+
+```bash
+Get-Content -Raw "$env:USERPROFILE\.clasprc.json" | gh secret set CLASPRC_JSON --repo OPS-PIvers/OMSAgendaSync
+```
+
+### Manual Deployment
+
+Only needed to deploy uncommitted work or to roll back to an older version. CI
+will overwrite a manual deployment on the next push to `main`.
+
+```bash
 clasp push
-
-# Update web app deployment (replace with actual version number)
-clasp redeploy AKfycbwtKGbS9PtKwSVgHUsN03r451weFHmEkK2QrtsLx0_XwmDoiFWa53rwXcn3TqoFRSKDWg --versionNumber <LATEST_VERSION_NUMBER>
+clasp create-version "Description of the change"
+clasp redeploy AKfycbwtKGbS9PtKwSVgHUsN03r451weFHmEkK2QrtsLx0_XwmDoiFWa53rwXcn3TqoFRSKDWg --versionNumber <VERSION>
 ```
 
 ### Google Apps Script Commands
@@ -73,17 +96,17 @@ clasp redeploy AKfycbwtKGbS9PtKwSVgHUsN03r451weFHmEkK2QrtsLx0_XwmDoiFWa53rwXcn3T
 # Push code to GAS project
 clasp push
 
-# Pull latest code from GAS project  
+# Pull latest code from GAS project
 clasp pull
 
-# Check deployment status
+# List the files that would be pushed
 clasp status
 
-# List all deployments
+# List deployments and the version each serves (--json for machine-readable output)
 clasp deployments
 
-# View project info
-clasp version
+# List script versions
+clasp versions
 ```
 
 ## Configuration
@@ -119,3 +142,4 @@ The system includes two automated triggers:
 - The web app has anonymous access for school-wide availability
 - All hyperlinks in slides are preserved as clickable HYPERLINK formulas in sheets
 - Text extraction relies on precise coordinate matching - template modifications require coordinate updates
+- Never write a full `script.google.com/macros/s/.../exec` URL inside an inline `<script>` block in `index.html`. HtmlService's sanitizer strips macro URLs from script content (though not from markup attributes), truncating the string literal and breaking the entire script so no event listeners bind. Read the URL off an element's `href` instead.
