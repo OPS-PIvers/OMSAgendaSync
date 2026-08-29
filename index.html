@@ -68,8 +68,15 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
+    button, .grade-button, .fab-button {
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+      -webkit-appearance: none;
+    }
+
     .grade-button {
       position: relative;
+      z-index: 1;
       padding: 0.75rem 1.5rem;
       border-radius: 9999px;
       border: none;
@@ -94,6 +101,7 @@
       position: absolute;
       top: 0.25rem;
       bottom: 0.25rem;
+      pointer-events: none;
       border-radius: 9999px;
       transition: left 0.3s cubic-bezier(0.22, 1, 0.36, 1), width 0.3s cubic-bezier(0.22, 1, 0.36, 1);
     }
@@ -294,10 +302,10 @@
         <button class="grade-button" data-grade="7th Grade">7th Grade</button>
         <button class="grade-button" data-grade="8th Grade">8th Grade</button>
       </div>
-      <button id="calendar-app-button" class="inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-white shadow-sm transition-colors whitespace-nowrap" style="background-color: var(--ops-blue); font-family: var(--ops-font-heading);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
+      <a id="calendar-app-button" href="https://script.google.com/macros/s/AKfycbz69EEYO818k-y86hM5QyaSTBCu6nrdrfjSYZPZqnmtelb0vk3fQH8ZJrU3EwihfNdpjA/exec?view=calendar" target="_blank" rel="noopener" class="cursor-pointer inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-white shadow-sm transition-colors whitespace-nowrap" style="background-color: var(--ops-blue); font-family: var(--ops-font-heading);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
         <i class="fas fa-calendar-check"></i>
         OMS Assessment Calendar
-      </button>
+      </a>
     </nav>
 
     <!-- Disclaimer -->
@@ -392,13 +400,6 @@
     const pdfButton = document.getElementById('pdf-button');
     const archiveButton = document.getElementById('archive-button');
     const calendarAppButton = document.getElementById('calendar-app-button');
-    calendarAppButton.addEventListener('click', () => {
-        const now = new Date();
-        const pad = (n) => String(n).padStart(2, '0');
-        const month = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
-        const day = `${month}-${pad(now.getDate())}`;
-        window.open(`https://script.google.com/macros/s/AKfycbz69EEYO818k-y86hM5QyaSTBCu6nrdrfjSYZPZqnmtelb0vk3fQH8ZJrU3EwihfNdpjA/exec?view=calendar&month=${month}&day=${day}`, '_blank');
-    });
     const backToTodayButton = document.getElementById('back-to-today');
 
     // --- UI Update Functions ---
@@ -639,6 +640,44 @@
     
     // --- Data Fetching ---
 
+    // Wraps google.script.run so a call that never comes back can't hang the page.
+    // The Apps Script bridge lives in a cross-site iframe; on mobile browsers that
+    // block third-party storage the callbacks sometimes never fire at all.
+    function callServer(functionName, args, timeoutMs = 30000) {
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          reject(new Error(`The server did not respond (${functionName}). Please refresh and try again.`));
+        }, timeoutMs);
+
+        const finish = (fn) => (value) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          fn(value);
+        };
+
+        google.script.run
+          .withSuccessHandler(finish(resolve))
+          .withFailureHandler(finish(reject))
+          [functionName].apply(null, args || []);
+      });
+    }
+
+    // The calendar entry point is a real <a> so the tap is never treated as a
+    // script-opened popup (window.open is blocked inside the Apps Script sandbox
+    // iframe on iOS). Here we only fill in today's date.
+    function updateCalendarLink() {
+      if (!calendarAppButton) return;
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const month = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+      const day = `${month}-${pad(now.getDate())}`;
+      calendarAppButton.href = `https://script.google.com/macros/s/AKfycbz69EEYO818k-y86hM5QyaSTBCu6nrdrfjSYZPZqnmtelb0vk3fQH8ZJrU3EwihfNdpjA/exec?view=calendar&month=${month}&day=${day}`;
+    }
+
     async function fetchData(archiveDate = null) {
       showLoadingSkeletons();
       try {
@@ -655,22 +694,9 @@
            return;
         }
         
-        let response;
-        if (archiveDate) {
-          response = await new Promise((resolve, reject) => {
-            google.script.run
-              .withSuccessHandler(resolve)
-              .withFailureHandler(reject)
-              .getArchivedDataForDate(archiveDate);
-          });
-        } else {
-          response = await new Promise((resolve, reject) => {
-            google.script.run
-              .withSuccessHandler(resolve)
-              .withFailureHandler(reject)
-              .getAgendaData();
-          });
-        }
+        const response = archiveDate
+          ? await callServer('getArchivedDataForDate', [archiveDate])
+          : await callServer('getAgendaData', []);
 
         if (response && response.error) {
           throw new Error(response.error);
@@ -998,47 +1024,12 @@
     }
 
 
-    // --- Test Function to Verify google.script.run ---
-    async function testGoogleScriptRun() {
-      console.log('=== TESTING google.script.run CONNECTION ===');
-
-      // Check if google.script.run is available
-      if (typeof google === 'undefined' || !google.script || !google.script.run) {
-        console.log('google.script.run is NOT available (running in local mode)');
-        return false;
-      }
-
-      try {
-        const testResponse = await new Promise((resolve, reject) => {
-          console.log('Calling testSimpleReturn...');
-          google.script.run
-            .withSuccessHandler((response) => {
-              console.log('testSimpleReturn SUCCESS:', response);
-              resolve(response);
-            })
-            .withFailureHandler((error) => {
-              console.error('testSimpleReturn FAILURE:', error);
-              reject(error);
-            })
-            .testSimpleReturn();
-        });
-
-        console.log('Test function returned:', testResponse);
-        return true;
-      } catch (error) {
-        console.error('Test function failed:', error);
-        return false;
-      }
-    }
-
     // --- Initialization & Event Listeners ---
-    document.addEventListener('DOMContentLoaded', async () => {
+    // Everything in here is synchronous on purpose: the UI must be clickable
+    // before any call to the Apps Script backend is made, so a slow or failed
+    // server call can never leave the page unresponsive.
+    function initUi() {
       updateDateDisplay();
-
-      // Run test function first to verify google.script.run works
-      console.log('Running test function before main data fetch...');
-      await testGoogleScriptRun();
-      console.log('Test function completed, proceeding with main data fetch...');
 
       const initialButton = document.querySelector(`.grade-button[data-grade="${currentGradeFilter}"]`);
       if (initialButton) {
@@ -1055,7 +1046,7 @@
           renderAllContent(currentGradeFilter);
         });
       });
-    
+
       window.addEventListener('resize', () => {
           const activeButton = document.querySelector('.grade-button.active');
           if (activeButton) {
@@ -1063,8 +1054,10 @@
           }
       });
 
+      updateCalendarLink();
+
       printButton.addEventListener('click', printAgendas);
-    
+
       const pdfModal = document.getElementById('pdf-modal');
       const closeModalButton = document.getElementById('close-modal-button');
       const cancelPdfButton = document.getElementById('cancel-pdf-button');
@@ -1078,12 +1071,12 @@
       const closeTheModal = () => pdfModal.classList.add('hidden');
       closeModalButton.addEventListener('click', closeTheModal);
       cancelPdfButton.addEventListener('click', closeTheModal);
-      
+
       generatePdfButton.addEventListener('click', () => {
           generatePdf();
           closeTheModal();
       });
-      
+
       // Archive functionality
       const archiveModal = document.getElementById('archive-modal');
       const closeArchiveModalButton = document.getElementById('close-archive-modal-button');
@@ -1098,23 +1091,37 @@
       const closeArchiveModal = () => archiveModal.classList.add('hidden');
       closeArchiveModalButton.addEventListener('click', closeArchiveModal);
       cancelArchiveButton.addEventListener('click', closeArchiveModal);
-      
+
       viewArchiveButton.addEventListener('click', () => {
         const selectedDate = archiveDateInput.value;
-        console.log(`Date picker selected: ${selectedDate}`);
         if (selectedDate) {
-          console.log(`Date format validation: ${selectedDate} matches YYYY-MM-DD format`);
           viewArchiveDate(selectedDate);
           closeArchiveModal();
         } else {
           showMessage('Please select a date.', 'error');
         }
       });
-      
-      backToTodayButton.addEventListener('click', backToToday);
 
+      backToTodayButton.addEventListener('click', backToToday);
+    }
+
+    function startApp() {
+      try {
+        initUi();
+      } catch (error) {
+        // A broken listener must not take the rest of the page down with it.
+        console.error('UI initialization failed:', error);
+      }
       fetchData();
-    });
+    }
+
+    // DOMContentLoaded may already have fired by the time this script runs
+    // (the Apps Script HtmlService sandbox can inject it late).
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startApp);
+    } else {
+      startApp();
+    }
   </script>
 </body>
 </html>
