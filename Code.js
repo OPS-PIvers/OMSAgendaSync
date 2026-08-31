@@ -63,111 +63,125 @@ function extractTextWithAllLinks(textRange) {
     return 'N/A'; // Return a default value for empty text boxes
   }
 
-  const paragraphs = []; // Array of paragraphs, each paragraph is an array of parts
-  let hasHyperlink = false;
-
-  // Walk actual paragraphs so list formatting (bullets, nesting) survives.
-  // Track how far into the text we've consumed: when lines are separated by
-  // soft line breaks (Shift+Enter), getParagraphs() can report overlapping
-  // ranges that each cover the same text, which duplicated content.
-  let consumedUpTo = -1;
-  textRange.getParagraphs().forEach(paragraph => {
-    const range = paragraph.getRange();
-    if (!range) return;
-
-    try {
-      const startIndex = range.getStartIndex();
-      if (startIndex < consumedUpTo) return; // overlaps text already extracted
-      consumedUpTo = range.getEndIndex();
-    } catch (e) {
-      // Index info unavailable — process the paragraph normally.
-    }
-
-    const paragraphText = range.asString();
-    if (paragraphText.trim() === '') return;
-
-    const parts = [];
-
-    // Encode bullet/nesting as a literal text prefix so it survives the
-    // sheet round-trip without any special protocol.
-    try {
+  // Bullet/nesting prefixes keyed by the paragraph's start index in the full
+  // text. Content is NOT taken from getParagraphs(): when lines are separated
+  // by soft line breaks (Shift+Enter), Slides reports paragraphs with
+  // overlapping ranges that each cover the same text, which duplicated
+  // content. A keyed lookup dedupes those for free.
+  const bulletPrefixes = {};
+  try {
+    textRange.getParagraphs().forEach(paragraph => {
+      const range = paragraph.getRange();
+      if (!range) return;
       const listStyle = range.getListStyle();
       if (listStyle && listStyle.isInList()) {
         const level = listStyle.getNestingLevel() || 0;
-        parts.push({ type: 'plain', text: '  '.repeat(level) + '• ' });
-      }
-    } catch (e) {
-      // List info unavailable — fall through to plain text.
-    }
-
-    range.getRuns().forEach(run => {
-      // Normalize soft line breaks (Shift+Enter) to newlines and strip only
-      // the trailing paragraph break — interior breaks are real line breaks
-      // and must survive, or multi-line boxes collapse into one glued line.
-      const runText = run.asString().replace(/\u000B/g, '\n').replace(/\n+$/, '');
-      if (runText.length === 0) return;
-
-      const link = run.getTextStyle().getLink();
-      const url = link && link.getUrl();
-
-      if (url) {
-        hasHyperlink = true;
-        const prev = parts[parts.length - 1];
-        if (prev && prev.type === 'hyperlink' && prev.url === url) {
-          prev.text += runText; // merge adjacent runs of the same link
-        } else {
-          parts.push({ type: 'hyperlink', url: url, text: runText });
-        }
-      } else {
-        const prev = parts[parts.length - 1];
-        if (prev && prev.type === 'plain') {
-          prev.text += runText; // merge adjacent plain runs (bold/italic splits)
-        } else {
-          parts.push({ type: 'plain', text: runText });
-        }
+        bulletPrefixes[range.getStartIndex()] = '  '.repeat(level) + '• ';
       }
     });
+  } catch (e) {
+    // List info unavailable — fall through to plain text.
+  }
 
-    if (parts.length > 0) {
-      paragraphs.push(parts);
+  // Walk the runs of the WHOLE text range exactly once. Runs are sequential
+  // and never overlap, so nothing can be emitted twice. Line structure comes
+  // from the text itself: paragraph breaks arrive as \n, soft line breaks
+  // (Shift+Enter) as \u000B (vertical tab), and both become a newline in the output.
+  const parts = [];
+  let hasHyperlink = false;
+
+  const pushText = (text, url) => {
+    if (text.length === 0) return;
+    const prev = parts[parts.length - 1];
+    if (url) {
+      hasHyperlink = true;
+      if (prev && prev.type === 'hyperlink' && prev.url === url) {
+        prev.text += text; // merge adjacent runs of the same link
+      } else {
+        parts.push({ type: 'hyperlink', url: url, text: text });
+      }
+    } else if (prev && prev.type === 'plain') {
+      prev.text += text; // merge adjacent plain runs (bold/italic splits)
+    } else {
+      parts.push({ type: 'plain', text: text });
+    }
+  };
+
+  let atLineStart = true;
+  textRange.getRuns().forEach(run => {
+    const raw = run.asString().replace(/\u000B/g, '\n');
+    if (raw.length === 0) return;
+
+    const link = run.getTextStyle().getLink();
+    const url = link && link.getUrl();
+
+    let runStart = -1;
+    try {
+      runStart = run.getStartIndex();
+    } catch (e) {
+      // Index unavailable — bullet prefixes just won't apply to this run.
+    }
+
+    let offset = 0;
+    while (offset < raw.length) {
+      if (atLineStart && runStart >= 0) {
+        const prefix = bulletPrefixes[runStart + offset];
+        if (prefix) pushText(prefix, null);
+      }
+      atLineStart = false;
+
+      const nl = raw.indexOf('\n', offset);
+      const end = nl === -1 ? raw.length : nl;
+      pushText(raw.slice(offset, end), url); // link text without the break
+      if (nl === -1) {
+        offset = raw.length;
+      } else {
+        pushText('\n', null); // breaks are always plain, never link text
+        atLineStart = true;
+        offset = nl + 1;
+      }
     }
   });
 
-  const nonEmptyParagraphs = paragraphs.filter(p => p.length > 0);
+  // Trim trailing line breaks (every shape's text ends with one).
+  let last = parts[parts.length - 1];
+  while (last && last.type === 'plain') {
+    last.text = last.text.replace(/\n+$/, '');
+    if (last.text.length > 0) break;
+    parts.pop();
+    last = parts[parts.length - 1];
+  }
 
-  if (nonEmptyParagraphs.length === 0) {
+  if (parts.length === 0) {
     return fullText.trim() || 'N/A';
   }
 
   // If no hyperlinks, just join all text naturally
   if (!hasHyperlink) {
-    return nonEmptyParagraphs.map(para =>
-      para.map(part => part.text).join('')
-    ).join('\n');
+    return parts.map(part => part.text).join('');
   }
 
-  // Build concatenated formula with proper paragraph structure
-  const paragraphFormulas = nonEmptyParagraphs.map(paragraph => {
-    const parts = paragraph.map(part => {
-      if (part.type === 'hyperlink') {
-        const escapedText = part.text.replace(/"/g, '""');
-        // Quotes are illegal in URLs anyway — percent-encode them so they
-        // can't terminate the formula string early.
-        const safeUrl = part.url.replace(/"/g, '%22');
-        return `HYPERLINK("${safeUrl}", "${escapedText}")`;
-      } else {
-        const escapedText = part.text.replace(/"/g, '""');
-        return `"${escapedText}"`;
-      }
-    });
-
-    // Join parts within the same paragraph directly with &
-    // This keeps hyperlinks inline with surrounding text
-    return parts.join(' & ');
+  // Build a single concatenated formula. Newlines inside plain text become
+  // CHAR(10) so the string literals stay single-line.
+  const pieces = [];
+  parts.forEach(part => {
+    if (part.type === 'hyperlink') {
+      const escapedText = part.text.replace(/"/g, '""');
+      // Quotes are illegal in URLs anyway — percent-encode them so they
+      // can't terminate the formula string early.
+      const safeUrl = part.url.replace(/"/g, '%22');
+      pieces.push(`HYPERLINK("${safeUrl}", "${escapedText}")`);
+    } else {
+      part.text.split('\n').forEach((segment, i) => {
+        if (i > 0) pieces.push('CHAR(10)');
+        if (segment.length > 0) {
+          pieces.push(`"${segment.replace(/"/g, '""')}"`);
+        }
+      });
+    }
   });
 
-  // Join paragraphs with CHAR(10) for line breaks between paragraphs
-  return '=' + paragraphFormulas.join(' & CHAR(10) & ');
+  return '=' + pieces.join(' & ');
 }
 
 /**
