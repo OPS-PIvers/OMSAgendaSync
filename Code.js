@@ -67,9 +67,21 @@ function extractTextWithAllLinks(textRange) {
   let hasHyperlink = false;
 
   // Walk actual paragraphs so list formatting (bullets, nesting) survives.
+  // Track how far into the text we've consumed: when lines are separated by
+  // soft line breaks (Shift+Enter), getParagraphs() can report overlapping
+  // ranges that each cover the same text, which duplicated content.
+  let consumedUpTo = -1;
   textRange.getParagraphs().forEach(paragraph => {
     const range = paragraph.getRange();
     if (!range) return;
+
+    try {
+      const startIndex = range.getStartIndex();
+      if (startIndex < consumedUpTo) return; // overlaps text already extracted
+      consumedUpTo = range.getEndIndex();
+    } catch (e) {
+      // Index info unavailable — process the paragraph normally.
+    }
 
     const paragraphText = range.asString();
     if (paragraphText.trim() === '') return;
@@ -89,7 +101,10 @@ function extractTextWithAllLinks(textRange) {
     }
 
     range.getRuns().forEach(run => {
-      const runText = run.asString().replace(/\n/g, '');
+      // Normalize soft line breaks (Shift+Enter) to newlines and strip only
+      // the trailing paragraph break — interior breaks are real line breaks
+      // and must survive, or multi-line boxes collapse into one glued line.
+      const runText = run.asString().replace(/\u000B/g, '\n').replace(/\n+$/, '');
       if (runText.length === 0) return;
 
       const link = run.getTextStyle().getLink();
