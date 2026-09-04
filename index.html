@@ -834,6 +834,62 @@
         });
     }
 
+    // Draw a clickable rectangle over every hyperlink in a table cell.
+    //
+    // autoTable can only link a cell as a whole, so link rects are placed by
+    // hand. cell.text holds the lines autoTable actually drew AFTER wrapping,
+    // while cell.linkSourceLines holds the unwrapped lines and the character
+    // range each URL covers. Walking one against the other gives every link its
+    // own rect, so a line carrying two URLs no longer sends both to the first.
+    function drawCellHyperlinks(doc, cell) {
+        const sourceLines = cell.linkSourceLines;
+        if (!sourceLines || !sourceLines.some(line => line.segments.length > 0)) return;
+
+        const drawnLines = Array.isArray(cell.text) ? cell.text : [cell.text];
+        const scaleFactor = doc.internal.scaleFactor;
+        const fontSize = cell.styles.fontSize;
+        // Matches autoTable's own line box (fontSize * 1.15, in document units).
+        const lineHeight = (fontSize / scaleFactor) * 1.15;
+        const widthOf = (str) => (str ? doc.getStringUnitWidth(str) * fontSize / scaleFactor : 0);
+        const padding = (side) => (typeof cell.padding === 'function' ? cell.padding(side) : 0);
+        const originX = cell.x + padding('left');
+        const originY = cell.y + padding('top');
+
+        let sourceIndex = 0;
+        let searchFrom = 0;
+
+        for (let drawnIndex = 0; drawnIndex < drawnLines.length; drawnIndex++) {
+            const drawnLine = String(drawnLines[drawnIndex] || '');
+
+            // Locate this drawn line in the source. Wrapping splits one source
+            // line into several drawn ones and drops the space at each break, so
+            // search forward rather than assuming the two line up one to one.
+            let start = -1;
+            while (sourceIndex < sourceLines.length) {
+                start = sourceLines[sourceIndex].text.indexOf(drawnLine, searchFrom);
+                if (start !== -1) break;
+                sourceIndex++;
+                searchFrom = 0;
+            }
+            if (sourceIndex >= sourceLines.length) return; // Ran out of source lines.
+
+            const sourceText = sourceLines[sourceIndex].text;
+            const end = start + drawnLine.length;
+            const y = originY + drawnIndex * lineHeight;
+
+            sourceLines[sourceIndex].segments.forEach(segment => {
+                const from = Math.max(segment.start, start);
+                const to = Math.min(segment.end, end);
+                if (to <= from) return; // This link is not on this drawn line.
+                const x = originX + widthOf(sourceText.slice(start, from));
+                const width = widthOf(sourceText.slice(from, to));
+                if (width > 0) doc.link(x, y, width, lineHeight, { url: segment.url });
+            });
+
+            searchFrom = end;
+        }
+    }
+
     // --- PDF GENERATION FUNCTION ---
     function generatePdf() {
         const { jsPDF } = window.jspdf;
@@ -950,38 +1006,29 @@
                     data.cell.text = [data.cell.raw.text];
                     data.cell.styles.textColor = '#2d3f89';
                 } else if (Array.isArray(data.cell.raw)) {
-                    // Array of paragraphs, each paragraph is an array of parts
-                    const paragraphTexts = [];
-                    const allHyperlinks = [];
-
-                    data.cell.raw.forEach(paragraph => {
-                        if (!Array.isArray(paragraph)) {
-                            // Shouldn't happen, but handle gracefully
-                            paragraphTexts.push(String(paragraph));
-                            return;
+                    // Array of lines, each line an array of inline parts. Record
+                    // the flattened text plus the character range each URL covers,
+                    // so didDrawCell can place one link rect per hyperlink.
+                    const sourceLines = data.cell.raw.map(line => {
+                        if (!Array.isArray(line)) {
+                            return { text: String(line), segments: [] };
                         }
 
-                        // Build text for this paragraph by joining inline parts
-                        const paragraphParts = [];
-                        paragraph.forEach(part => {
+                        let text = '';
+                        const segments = [];
+                        line.forEach(part => {
                             if (typeof part === 'object' && part.url) {
-                                paragraphParts.push(part.text);
-                                allHyperlinks.push(part);
+                                segments.push({ url: part.url, start: text.length, end: text.length + part.text.length });
+                                text += part.text;
                             } else {
-                                paragraphParts.push(String(part));
+                                text += String(part);
                             }
                         });
-
-                        // Join parts within paragraph with no separator (inline)
-                        paragraphTexts.push(paragraphParts.join(''));
+                        return { text: text, segments: segments };
                     });
 
-                    // Join paragraphs with newlines
-                    data.cell.text = paragraphTexts;
-
-                    // Store hyperlink info and paragraph structure for drawing phase
-                    data.cell.hyperlinks = allHyperlinks;
-                    data.cell.paragraphs = data.cell.raw;
+                    data.cell.text = sourceLines.map(line => line.text);
+                    data.cell.linkSourceLines = sourceLines;
                 }
             },
 
@@ -989,36 +1036,8 @@
                 if (typeof data.cell.raw === 'object' && data.cell.raw.url) {
                     // Single hyperlink - make entire cell clickable
                     doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url: data.cell.raw.url });
-                } else if (Array.isArray(data.cell.raw) && data.cell.paragraphs && data.cell.hyperlinks && data.cell.hyperlinks.length > 0) {
-                    // Multiple paragraphs with hyperlinks
-                    // Calculate line height based on number of paragraphs
-                    const numLines = data.cell.paragraphs.length;
-                    const lineHeight = data.cell.height / numLines;
-                    let currentY = data.cell.y;
-
-                    // For each paragraph, check if it contains hyperlinks
-                    data.cell.paragraphs.forEach((paragraph, index) => {
-                        if (!Array.isArray(paragraph)) {
-                            currentY += lineHeight;
-                            return;
-                        }
-
-                        // Check if this paragraph contains any hyperlinks
-                        const hasHyperlink = paragraph.some(part => typeof part === 'object' && part.url);
-
-                        if (hasHyperlink) {
-                            // Find the first hyperlink in this paragraph
-                            const firstHyperlink = paragraph.find(part => typeof part === 'object' && part.url);
-                            if (firstHyperlink) {
-                                // Make this line clickable
-                                // Note: For inline hyperlinks, the entire line is clickable
-                                // This is a pragmatic approach since precise text positioning is complex
-                                doc.link(data.cell.x, currentY, data.cell.width, lineHeight, { url: firstHyperlink.url });
-                            }
-                        }
-
-                        currentY += lineHeight;
-                    });
+                } else if (Array.isArray(data.cell.raw) && data.cell.linkSourceLines) {
+                    drawCellHyperlinks(doc, data.cell);
                 }
             }
         });
