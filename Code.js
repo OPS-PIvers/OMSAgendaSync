@@ -1199,100 +1199,116 @@ function doGet() {
 }
 
 /**
- * Helper function to parse concatenated formulas and convert them to web-app-friendly format.
- * Parses formulas with paragraph structure:
- * ="part1" & HYPERLINK("url", "part2") & "part3" & CHAR(10) & "next paragraph"
- * Returns: part1[hyperlinked part2]part3\nnext paragraph
+ * Converts a stored concatenation formula back into plain cell content for the
+ * web app, keeping every hyperlink inline.
+ *
+ * Input:  ="part1" & HYPERLINK("url", "part2") & CHAR(10) & CHAR(10) & "next line"
+ * Output: part1=HYPERLINK("url", "part2") followed by a blank line, then: next line
+ *
+ * The formula is walked left to right one token at a time rather than being
+ * split on a fixed `& CHAR(10) &` separator. A blank line in a slide text box
+ * produces two adjacent CHAR(10) tokens, which a fixed separator cannot match;
+ * the old splitter treated the leftover `CHAR(10)` as an unparseable paragraph
+ * and dropped it along with every part after it, so only the first hyperlink in
+ * such a cell ever reached the web app.
+ *
  * @param {string} formula The formula string to parse
- * @returns {string} The parsed content with HYPERLINK formulas inline and paragraphs on separate lines
+ * @returns {string} The content with HYPERLINK formulas inline and real newlines
  */
 function parseConcatenatedFormula(formula) {
   if (!formula || !formula.startsWith('=')) {
     return formula;
   }
 
-  // Remove the leading = sign for easier parsing
-  const formulaContent = formula.substring(1).trim();
+  let remaining = formula.substring(1);
+  let output = '';
 
-  // Split by & CHAR(10) & to separate paragraphs
-  // Use a regex that matches the pattern more reliably
-  const paragraphPattern = /\s*&\s*CHAR\(10\)\s*&\s*/g;
-  const paragraphStrings = formulaContent.split(paragraphPattern);
+  while (remaining.length > 0) {
+    const trimmed = remaining.replace(/^\s+/, '');
+    if (trimmed.length === 0) break;
+    remaining = trimmed;
 
-  const parsedParagraphs = [];
-
-  for (const paragraphStr of paragraphStrings) {
-    const paragraphParts = parseParagraphParts(paragraphStr.trim());
-    if (paragraphParts.length > 0) {
-      parsedParagraphs.push(paragraphParts);
+    // Concatenation operator between operands.
+    if (remaining.charAt(0) === '&') {
+      remaining = remaining.substring(1);
+      continue;
     }
+
+    // HYPERLINK("url", "text") — re-emitted inline for the web app to render.
+    const hyperlink = remaining.match(/^HYPERLINK\(\s*"((?:[^"]|"")*)"\s*,\s*"((?:[^"]|"")*)"\s*\)/i);
+    if (hyperlink) {
+      output += '=HYPERLINK("' + hyperlink[1] + '", "' + hyperlink[2] + '")';
+      remaining = remaining.substring(hyperlink[0].length);
+      continue;
+    }
+
+    // CHAR(n) — CHAR(10) is the line break the extractor writes.
+    const charCode = remaining.match(/^CHAR\(\s*(\d+)\s*\)/i);
+    if (charCode) {
+      output += String.fromCharCode(Number(charCode[1]));
+      remaining = remaining.substring(charCode[0].length);
+      continue;
+    }
+
+    // "quoted string", with "" as an escaped quote.
+    if (remaining.charAt(0) === '"') {
+      const closing = findClosingQuote(remaining);
+      if (closing === -1) break; // Unterminated string — nothing reliable left.
+      output += remaining.substring(1, closing).replace(/""/g, '"');
+      remaining = remaining.substring(closing + 1);
+      continue;
+    }
+
+    // Anything else (a hand-edited formula, an unexpected function): drop just
+    // that operand and carry on, so one odd token cannot truncate the cell.
+    const nextOperator = findNextOperator(remaining);
+    if (nextOperator === -1) break;
+    remaining = remaining.substring(nextOperator);
   }
 
-  // Join paragraphs with newlines for the web app
-  return parsedParagraphs.map(parts => parts.join('')).join('\n');
+  return output;
 }
 
 /**
- * Helper function to parse parts within a single paragraph.
- * Parts are separated by & but should be joined inline (no line breaks).
- * @param {string} paragraphStr The paragraph formula string
- * @returns {Array<string>} Array of parsed parts (HYPERLINK formulas or plain text)
+ * Finds the index of the quote that closes the string starting at index 0,
+ * treating "" as an escaped quote rather than a terminator.
+ * @param {string} text Formula text whose first character is a double quote
+ * @returns {number} Index of the closing quote, or -1 if the string is unterminated
  */
-function parseParagraphParts(paragraphStr) {
-  const parts = [];
-  let remaining = paragraphStr;
-
-  while (remaining.length > 0) {
-    remaining = remaining.trim();
-
-    // Check if it starts with HYPERLINK
-    if (remaining.startsWith('HYPERLINK(')) {
-      const hyperlinkMatch = remaining.match(/^HYPERLINK\("([^"]+)",\s*"((?:[^"]|"")*)"\)/);
-      if (hyperlinkMatch) {
-        // Add as HYPERLINK formula for the web app to parse
-        parts.push(`=HYPERLINK("${hyperlinkMatch[1]}", "${hyperlinkMatch[2]}")`);
-        remaining = remaining.substring(hyperlinkMatch[0].length).trim();
-      } else {
-        // Malformed HYPERLINK, skip it
-        break;
+function findClosingQuote(text) {
+  let i = 1;
+  while (i < text.length) {
+    if (text.charAt(i) === '"') {
+      if (text.charAt(i + 1) === '"') {
+        i += 2;
+        continue;
       }
+      return i;
     }
-    // Check if it starts with a quoted string
-    else if (remaining.startsWith('"')) {
-      let endIndex = 1;
-      while (endIndex < remaining.length) {
-        if (remaining[endIndex] === '"') {
-          // Check if it's an escaped quote ""
-          if (endIndex + 1 < remaining.length && remaining[endIndex + 1] === '"') {
-            endIndex += 2;
-            continue;
-          } else {
-            break;
-          }
-        }
-        endIndex++;
-      }
-
-      if (endIndex < remaining.length) {
-        const quotedText = remaining.substring(1, endIndex);
-        const unescapedText = quotedText.replace(/""/g, '"');
-        parts.push(unescapedText);
-        remaining = remaining.substring(endIndex + 1).trim();
-      } else {
-        break;
-      }
-    }
-    // Skip & concatenation operators
-    else if (remaining.startsWith('&')) {
-      remaining = remaining.substring(1).trim();
-    }
-    else {
-      // Unknown pattern, stop parsing this paragraph
-      break;
-    }
+    i++;
   }
+  return -1;
+}
 
-  return parts;
+/**
+ * Finds the next top-level & in a formula, skipping any inside quoted strings.
+ * @param {string} text Formula text to scan
+ * @returns {number} Index of the next & outside a string, or -1 if there is none
+ */
+function findNextOperator(text) {
+  let i = 0;
+  while (i < text.length) {
+    const ch = text.charAt(i);
+    if (ch === '"') {
+      const closing = findClosingQuote(text.substring(i));
+      if (closing === -1) return -1;
+      i += closing + 1;
+      continue;
+    }
+    if (ch === '&') return i;
+    i++;
+  }
+  return -1;
 }
 
 /**
