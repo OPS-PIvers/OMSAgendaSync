@@ -302,7 +302,11 @@
         <button class="grade-button" data-grade="7th Grade">7th Grade</button>
         <button class="grade-button" data-grade="8th Grade">8th Grade</button>
       </div>
-      <a id="calendar-app-button" href="https://script.google.com/macros/s/AKfycbz69EEYO818k-y86hM5QyaSTBCu6nrdrfjSYZPZqnmtelb0vk3fQH8ZJrU3EwihfNdpjA/exec?view=calendar" target="_blank" rel="noopener" class="cursor-pointer inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-white shadow-sm transition-colors whitespace-nowrap" style="background-color: var(--ops-blue); font-family: var(--ops-font-heading);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
+      <!-- Temporarily hidden until the assessment calendar is ready to go live.
+           Remove the `display: none` from the style attribute below to restore it.
+           Inline style is used on purpose: it beats the Tailwind display classes
+           in the class list without touching them. -->
+      <a id="calendar-app-button" href="https://script.google.com/macros/s/AKfycbz69EEYO818k-y86hM5QyaSTBCu6nrdrfjSYZPZqnmtelb0vk3fQH8ZJrU3EwihfNdpjA/exec?view=calendar" target="_blank" rel="noopener" class="cursor-pointer inline-flex items-center gap-2 px-6 py-3 rounded-full font-semibold text-white shadow-sm transition-colors whitespace-nowrap" style="display: none; background-color: var(--ops-blue); font-family: var(--ops-font-heading);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
         <i class="fas fa-calendar-check"></i>
         OMS Assessment Calendar
       </a>
