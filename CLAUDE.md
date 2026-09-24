@@ -11,7 +11,7 @@ OMSAgendaSync is a Google Apps Script web application that extracts agenda text 
 ### Core Components
 
 - **Code.js**: Main Google Apps Script file containing all backend logic for:
-  - Text extraction from Google Slides using precise coordinate matching
+  - Text extraction from Google Slides by matching text boxes to slide zones
   - Data processing and storage in Google Sheets
   - Trigger management for automated extraction and archiving
   - Web app server-side functions
@@ -24,7 +24,7 @@ OMSAgendaSync is a Google Apps Script web application that extracts agenda text 
 
 - **Constants.js**: Configuration file containing:
   - Google Sheets and Slides IDs
-  - Precise text box coordinates for each day of the week
+  - Slide zones (day columns and field rows) used to locate agenda text boxes
   - Sheet names and column mappings
   - Staff directory structure
 
@@ -35,16 +35,20 @@ OMSAgendaSync is a Google Apps Script web application that extracts agenda text 
 
 ## Key Data Flow
 
-1. **Slides → Script**: `extractTextForCurrentDayAgenda()` extracts text from specific coordinates in Google Slides presentations
+1. **Slides → Script**: `extractTextForCurrentDayAgenda()` extracts text from the text boxes in each day's zones of the Google Slides presentations
 2. **Script → Sheets**: Processed data is stored in "Current_Day_Agendas" sheet with hyperlink preservation
 3. **Sheets → Web App**: Frontend loads data via `google.script.run` calls to backend functions
 4. **Archive Process**: Daily trigger moves current data to archive sheets (e.g., "Archive_2024_09")
 
 ## Text Extraction System
 
-The application uses precise coordinate matching to extract text from specific areas of Google Slides templates:
-- Each day of the week has three text boxes: "Turn In", "Activities", "Practice Work"
-- Coordinates are defined in `CONSTANTS.BOX_COORDINATES` with tolerance for minor variations
+The application finds agenda text by which zone of the slide each text box sits in:
+- Each day of the week has three fields: "Turn In", "Activities", "Practice Work", plus a full-width "Upcoming" strip
+- Zones are defined in `CONSTANTS.ZONES` as day columns (x) and field rows (y), in points, with every boundary in the gap between two template cards
+- A text box belongs to the zone its **centre point** falls in, so teachers can move or resize boxes freely as long as the centre stays on the right card
+- Several boxes in one zone are joined top to bottom; an empty box counts as found but blank
+- The template's cards, labels and day headers are the slide background image, so only teacher text boxes (and the title) are shapes
+- Fields with no text box in their zone, and decks with no slide for this week, are listed on the "Extraction_Issues" sheet, rewritten every run
 - The system preserves hyperlinks by converting them to Google Sheets HYPERLINK formulas
 
 ## Development Commands
@@ -115,12 +119,13 @@ clasp versions
 - **Presentation_IDs**: Configuration sheet with teacher information and slide IDs
 - **Current_Day_Agendas**: Live data storage for extracted agenda content  
 - **Staff Directory**: Teacher contact information and presentation links
+- **Extraction_Issues**: Agenda fields the latest extraction run could not find
 - **Archive_YYYY_MM**: Monthly archive sheets for historical data
 
 ### Key Constants to Update
 - `SPREADSHEET_ID`: Main Google Sheet containing all configuration and data
 - `MASTER_PRESENTATION_ID`: Template presentation copied for new teachers
-- `BOX_COORDINATES`: Precise pixel coordinates for text extraction areas
+- `ZONES`: Slide zones (in points) that each agenda field is read from
 
 ## Automation
 
@@ -141,5 +146,5 @@ The system includes two automated triggers:
 - Clear browser cache or use incognito mode after redeployment to see changes
 - The web app has anonymous access for school-wide availability
 - All hyperlinks in slides are preserved as clickable HYPERLINK formulas in sheets
-- Text extraction relies on precise coordinate matching - template modifications require coordinate updates
+- Text extraction relies on the template's card layout - if the template's cards move, update `CONSTANTS.ZONES` to match
 - Never write a full `script.google.com/macros/s/.../exec` URL inside an inline `<script>` block in `index.html`. HtmlService's sanitizer strips macro URLs from script content (though not from markup attributes), truncating the string literal and breaking the entire script so no event listeners bind. Read the URL off an element's `href` instead.

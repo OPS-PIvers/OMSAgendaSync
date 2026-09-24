@@ -31,11 +31,12 @@ const CONSTANTS = {
   ARCHIVE_SHEET_PREFIX: 'Archive_',
 
   /**
-   * A tolerance value (in points) for matching the position and size of shapes on the slides.
-   * This helps account for minor variations in shape placement.
-   * @type {number}
+   * The name of the sheet listing agenda fields the last extraction run could not
+   * find (no text box in that area of the slide, or no slide for this week).
+   * Rewritten on every run, so it always reflects the current state.
+   * @type {string}
    */
-  TOLERANCE: 5,
+  ISSUES_SHEET_NAME: 'Extraction_Issues',
 
   /**
    * The name of the sheet that contains the staff directory with columns:
@@ -64,37 +65,30 @@ const CONSTANTS = {
   },
 
   /**
-   * An object containing the precise coordinates and dimensions (x, y, width, height)
-   * for the text boxes to be extracted from the Google Slides.
-   * The coordinates are organized by the day of the week.
-   * @type {Object.<string, Object>}
+   * The slide areas each agenda field is read from, in points. A text box
+   * belongs to the zone its centre point falls in, so teachers can move or
+   * resize a box freely as long as its centre stays on the right card.
+   * Every boundary sits in the gap between two cards of the template.
+   * Ranges are [start, end): a centre exactly on a boundary goes to the later zone.
+   * Anything above ROWS.top[0] (title, "WEEK OF", day headers) is ignored.
+   * @type {Object}
    */
-  BOX_COORDINATES: {
-    'Monday': {
-      top: { x: 43.50, y: 124.70, width: 153.17, height: 38.69 },    // "Turn In"
-      middle: { x: 43.50, y: 194.49, width: 153.17, height: 104.88 }, // "Activities"
-      bottom: { x: 42.71, y: 329.03, width: 153.17, height: 51.02 }  // "Practice Work"
+  ZONES: {
+    // Day columns (x). The outer edges are open so nothing falls off the slide.
+    COLUMNS: {
+      'Monday': [-Infinity, 204.2],
+      'Tuesday': [204.2, 376.3],
+      'Wednesday': [376.3, 547.0],
+      'Thursday': [547.0, 719.1],
+      'Friday': [719.1, Infinity]
     },
-    'Tuesday': {
-      top: { x: 212.61, y: 124.70, width: 157.58, height: 38.69 },   // "Turn In"
-      middle: { x: 212.61, y: 194.49, width: 157.58, height: 104.88 },// "Activities"
-      bottom: { x: 211.82, y: 329.03, width: 157.58, height: 51.02 } // "Practice Work"
+    // Field rows (y) within each day column.
+    ROWS: {
+      top: [104, 179.4],     // "Turn In"
+      middle: [179.4, 314.2], // "Activities"
+      bottom: [314.2, 386.2]  // "Practice Work"
     },
-    'Wednesday': {
-      top: { x: 383.29, y: 124.70, width: 157.58, height: 38.69 },   // "Turn In"
-      middle: { x: 383.29, y: 194.49, width: 157.58, height: 104.88 },// "Activities"
-      bottom: { x: 382.50, y: 329.03, width: 157.58, height: 51.02 } // "Practice Work"
-    },
-    'Thursday': {
-      top: { x: 553.98, y: 124.70, width: 157.58, height: 39.66 },   // "Turn In"
-      middle: { x: 553.98, y: 194.49, width: 157.58, height: 104.88 },// "Activities"
-      bottom: { x: 553.19, y: 329.03, width: 157.58, height: 51.02 } // "Practice Work"
-    },
-    'Friday': {
-      top: { x: 727.50, y: 124.70, width: 161.06, height: 39.66 },   // "Turn In"
-      middle: { x: 727.50, y: 194.49, width: 161.06, height: 104.88 },// "Activities"
-      bottom: { x: 726.71, y: 329.03, width: 161.06, height: 51.02 } // "Practice Work"
-    },
-    'Upcoming': { x: 148.66, y: 392.40, width: 709.13, height: 31.23 }
+    // The Upcoming strip spans the full slide width below the day cards.
+    UPCOMING: [386.2, Infinity]
   }
 };

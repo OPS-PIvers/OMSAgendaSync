@@ -172,16 +172,104 @@ function extractTextWithAllLinks(textRange) {
       const safeUrl = part.url.replace(/"/g, '%22');
       pieces.push(`HYPERLINK("${safeUrl}", "${escapedText}")`);
     } else {
-      part.text.split('\n').forEach((segment, i) => {
-        if (i > 0) pieces.push('CHAR(10)');
-        if (segment.length > 0) {
-          pieces.push(`"${segment.replace(/"/g, '""')}"`);
-        }
-      });
+      pieces.push(...plainTextToFormulaPieces(part.text));
     }
   });
 
   return '=' + pieces.join(' & ');
+}
+
+/**
+ * Converts plain text into formula operands: quoted string literals, with each
+ * newline turned into CHAR(10) so every literal stays on one line.
+ * @param {string} text Plain text, possibly containing newlines.
+ * @returns {string[]} Operands to be joined with ' & '.
+ */
+function plainTextToFormulaPieces(text) {
+  const pieces = [];
+  text.split('\n').forEach((segment, i) => {
+    if (i > 0) pieces.push('CHAR(10)');
+    if (segment.length > 0) {
+      pieces.push(`"${segment.replace(/"/g, '""')}"`);
+    }
+  });
+  return pieces;
+}
+
+/**
+ * Display names for the agenda fields, as written to the issues sheet.
+ * @type {Object.<string, string>}
+ */
+const FIELD_LABELS = {
+  top: 'Turn In',
+  middle: 'Activities',
+  bottom: 'Practice Work',
+  upcoming: 'Upcoming'
+};
+
+/**
+ * Works out which of the given day's agenda fields a shape belongs to, using
+ * the zone its centre point falls in (see CONSTANTS.ZONES).
+ * @param {GoogleAppsScript.Slides.Shape} shape A shape on the agenda slide.
+ * @param {string} dayOfWeek The day being extracted, e.g. "Thursday".
+ * @returns {?string} 'top', 'middle', 'bottom' or 'upcoming', or null if the
+ *     shape is not in one of that day's zones.
+ */
+function findZoneField(shape, dayOfWeek) {
+  const zones = CONSTANTS.ZONES;
+  const centerX = shape.getLeft() + shape.getWidth() / 2;
+  const centerY = shape.getTop() + shape.getHeight() / 2;
+  const inRange = (value, range) => value >= range[0] && value < range[1];
+
+  if (inRange(centerY, zones.UPCOMING)) return 'upcoming';
+  if (!inRange(centerX, zones.COLUMNS[dayOfWeek])) return null;
+  return Object.keys(zones.ROWS).find(row => inRange(centerY, zones.ROWS[row])) || null;
+}
+
+/**
+ * Builds one cell value from every text box found in a zone. Usually there is
+ * exactly one; when a teacher adds extra boxes, their text is joined top to
+ * bottom, one box per line, keeping any hyperlinks.
+ * @param {GoogleAppsScript.Slides.Shape[]} shapes Shapes whose centre is in the zone.
+ * @returns {string} Plain text, a concatenated HYPERLINK formula, or 'N/A' if
+ *     every box is empty.
+ */
+function combineZoneShapes(shapes) {
+  const values = shapes
+    .filter(shape => !shape.getText().isEmpty())
+    .sort((a, b) => a.getTop() - b.getTop())
+    .map(shape => extractTextWithAllLinks(shape.getText()))
+    .filter(value => value !== 'N/A');
+
+  if (values.length === 0) return 'N/A';
+  if (values.length === 1) return values[0];
+  if (!values.some(value => value.startsWith('='))) return values.join('\n');
+
+  // At least one box has links, so the whole cell has to be one formula.
+  const operands = values.map(value => value.startsWith('=')
+    ? value.substring(1)
+    : plainTextToFormulaPieces(value).join(' & '));
+  return '=' + operands.filter(operand => operand.length > 0).join(' & CHAR(10) & ');
+}
+
+/**
+ * Rewrites the issues sheet with the fields the latest extraction run could
+ * not find, creating the sheet on first use. An empty list leaves just the
+ * header row, so a clean sheet means every teacher's agenda was found.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} spreadsheet The main spreadsheet.
+ * @param {Array[]} issues Rows of [timestamp, teacher, class, day, field, problem, link].
+ */
+function writeExtractionIssues(spreadsheet, issues) {
+  const sheetName = CONSTANTS.ISSUES_SHEET_NAME;
+  const sheet = spreadsheet.getSheetByName(sheetName) || spreadsheet.insertSheet(sheetName);
+  const header = ['Checked At', 'Teacher Last Name', 'Class Name', 'Day of Week', 'Field', 'Problem', 'Presentation'];
+
+  sheet.clearContents();
+  sheet.getRange(1, 1, 1, header.length).setValues([header]).setFontWeight('bold');
+  if (issues.length > 0) {
+    sheet.getRange(2, 1, issues.length, header.length).setValues(issues);
+  }
+  Logger.log(`Extraction issues: ${issues.length} written to '${sheetName}'.`);
 }
 
 /**
@@ -207,7 +295,7 @@ function extractTextForCurrentDayAgenda(dayToTest) {
   const SPREADSHEET_ID = CONSTANTS.SPREADSHEET_ID;
   const CONFIG_SHEET_NAME = CONSTANTS.CONFIG_SHEET_NAME;
   const DATA_SHEET_NAME = CONSTANTS.DATA_SHEET_NAME;
-  const BOX_COORDINATES = CONSTANTS.BOX_COORDINATES;
+  const DAY_COLUMNS = CONSTANTS.ZONES.COLUMNS;
 
   const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
 
@@ -246,9 +334,9 @@ function extractTextForCurrentDayAgenda(dayToTest) {
   const dayOfWeek = dayToTest || Utilities.formatDate(today, Session.getScriptTimeZone(), 'EEEE');
   Logger.log(`Running extraction for: ${dayOfWeek}`);
 
-  if (!BOX_COORDINATES.hasOwnProperty(dayOfWeek)) {
+  if (!DAY_COLUMNS.hasOwnProperty(dayOfWeek)) {
     const message = dayToTest ?
-      `The provided test day '${dayToTest}' has no coordinates defined.` :
+      `The provided test day '${dayToTest}' has no slide zone defined.` :
       `Today is ${dayOfWeek}. No agenda extraction scheduled for this day.`;
     Logger.log(message);
     if (isUiAvailable()) {
@@ -264,8 +352,9 @@ function extractTextForCurrentDayAgenda(dayToTest) {
   Logger.log(`Searching for slides with English text: "${weekOfText}"`);
   Logger.log(`Searching for slides with Spanish text: "${semanaDeText}"`);
 
-  const currentDayBoxes = BOX_COORDINATES[dayOfWeek];
-  const upcomingBox = BOX_COORDINATES['Upcoming'];
+  // Agenda fields the run could not find, written to the issues sheet at the end.
+  const issues = [];
+  const runTimestamp = new Date();
 
   const configDataRange = configSheet.getRange(2, 1, configSheet.getLastRow() - 1, 4);
   const configValues = configDataRange.getValues();
@@ -324,65 +413,31 @@ function extractTextForCurrentDayAgenda(dayToTest) {
       
       Logger.log(`Found agenda slide using ${matchedPattern} pattern for ${teacherLastName.trim()} - ${className.trim()}`);
 
-      const pageElements = agendaSlide.getPageElements();
-      let topBoxText = 'N/A', midBoxText = 'N/A', botBoxText = 'N/A', upcomingText = 'N/A';
-      const tolerance = CONSTANTS.TOLERANCE;
+      // Every text box whose centre lands in one of today's zones, keyed by field.
+      // A box that exists but is empty still counts as found (the teacher left it blank).
+      const found = { top: [], middle: [], bottom: [], upcoming: [] };
+      agendaSlide.getPageElements().forEach(element => {
+        if (element.getPageElementType() !== SlidesApp.PageElementType.SHAPE) return;
+        const shape = element.asShape();
+        const field = findZoneField(shape, dayOfWeek);
+        if (field) found[field].push(shape);
+      });
 
-      const matchesBox = (shape, targetBox, boxType = '') => {
-        const xDiff = Math.abs(shape.getLeft() - targetBox.x);
-        const yDiff = Math.abs(shape.getTop() - targetBox.y);
-        const wDiff = Math.abs(shape.getWidth() - targetBox.width);
-        const hDiff = Math.abs(shape.getHeight() - targetBox.height);
-        const matches = xDiff < tolerance && yDiff < tolerance && wDiff < tolerance && hDiff < tolerance;
-        
-        // Debug logging for Tuesday practice work specifically
-        if (dayOfWeek === 'Tuesday' && boxType === 'bottom') {
-          Logger.log(`=== TUESDAY PRACTICE WORK DEBUG ===`);
-          Logger.log(`Shape: (${shape.getLeft()}, ${shape.getTop()}) ${shape.getWidth()}x${shape.getHeight()}`);
-          Logger.log(`Target: (${targetBox.x}, ${targetBox.y}) ${targetBox.width}x${targetBox.height}`);
-          Logger.log(`Differences: X=${xDiff}, Y=${yDiff}, W=${wDiff}, H=${hDiff} (tolerance=${tolerance})`);
-          Logger.log(`Matches: ${matches}`);
-        }
-        
-        return matches;
-      };
-
-      pageElements.forEach(element => {
-        if (element.getPageElementType() === SlidesApp.PageElementType.SHAPE) {
-          const shape = element.asShape();
-          const textRange = shape.getText();
-          if (textRange.isEmpty()) return;
-
-          const cellValue = extractTextWithAllLinks(textRange);
-          const shapeText = textRange.asString().trim();
-
-          // Debug logging for Tuesday shapes with content
-          if (dayOfWeek === 'Tuesday' && shapeText !== '' && shapeText !== '...') {
-            Logger.log(`=== TUESDAY SHAPE WITH CONTENT ===`);
-            Logger.log(`Text: "${shapeText}"`);
-            Logger.log(`Position: (${shape.getLeft()}, ${shape.getTop()})`);
-            Logger.log(`Size: ${shape.getWidth()}x${shape.getHeight()}`);
-          }
-
-          if (matchesBox(shape, currentDayBoxes.top, 'top')) topBoxText = cellValue;
-          else if (matchesBox(shape, currentDayBoxes.middle, 'middle')) midBoxText = cellValue;
-          else if (matchesBox(shape, currentDayBoxes.bottom, 'bottom')) botBoxText = cellValue;
-          else if (matchesBox(shape, upcomingBox, 'upcoming')) upcomingText = cellValue;
+      const fieldValues = {};
+      Object.keys(found).forEach(field => {
+        fieldValues[field] = combineZoneShapes(found[field]);
+        if (found[field].length === 0) {
+          issues.push([
+            runTimestamp, teacherLastName.trim(), className.trim(), dayOfWeek,
+            FIELD_LABELS[field], 'No text box found in this area of the slide',
+            `https://docs.google.com/presentation/d/${presentationId.trim()}/edit`
+          ]);
         }
       });
 
-      // Debug logging for Tuesday final results
-      if (dayOfWeek === 'Tuesday') {
-        Logger.log(`=== TUESDAY FINAL RESULTS ===`);
-        Logger.log(`Turn In (top): "${topBoxText}"`);
-        Logger.log(`Activities (middle): "${midBoxText}"`);
-        Logger.log(`Practice Work (bottom): "${botBoxText}"`);
-        Logger.log(`Upcoming: "${upcomingText}"`);
-      }
-
       dataSheet.appendRow([
-        teacherLastName.trim(), className.trim(), dayOfWeek, topBoxText, midBoxText,
-        botBoxText, upcomingText, gradeLevel.trim()
+        teacherLastName.trim(), className.trim(), dayOfWeek, fieldValues.top, fieldValues.middle,
+        fieldValues.bottom, fieldValues.upcoming, gradeLevel.trim()
       ]);
       Logger.log(`Processed: ${teacherLastName.trim()} - ${className.trim()} for ${dayOfWeek}`);
 
@@ -392,8 +447,14 @@ function extractTextForCurrentDayAgenda(dayToTest) {
         teacherLastName.trim(), className.trim(), dayOfWeek, 'ERROR', 'ERROR', 'ERROR', 'ERROR',
         gradeLevel.trim(), `Error: ${e.message}`
       ]);
+      issues.push([
+        runTimestamp, teacherLastName.trim(), className.trim(), dayOfWeek, 'All fields',
+        e.message, `https://docs.google.com/presentation/d/${presentationId.trim()}/edit`
+      ]);
     }
   });
+
+  writeExtractionIssues(spreadsheet, issues);
 
   const completionMessage = 'Data for ' + dayOfWeek + ' has been extracted and compiled into the "' + DATA_SHEET_NAME + '" tab.';
   Logger.log('Hourly extraction complete - data updated in Current_Day_Agendas tab (archiving handled by separate daily trigger)');
