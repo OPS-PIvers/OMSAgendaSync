@@ -235,8 +235,11 @@
       box-shadow: 0 6px 16px rgba(0,0,0,0.25);
     }
     
-    .print-fab { background-color: var(--ops-blue); }
-    .print-fab:hover { background-color: var(--ops-blue-hover); }
+    /* Modal overlay layer. Not a Tailwind class (its scale stops at z-50), so
+       without this rule the modals had no z-index at all and the grade
+       buttons and FABs drew on top of them. */
+    .z-2000 { z-index: 2000; }
+
     .pdf-fab { background-color: var(--ops-red); }
     .pdf-fab:hover { background-color: var(--ops-red-hover); }
     
@@ -334,10 +337,7 @@
 
   <!-- Floating Action Buttons -->
   <div id="fab-container" class="fab-container no-print">
-    <button id="print-button" class="fab-button print-fab" aria-label="Print Current View" title="Print View">
-      <i class="fas fa-print"></i>
-    </button>
-    <button id="pdf-button" class="fab-button pdf-fab" aria-label="Save as PDF" title="Save as PDF">
+    <button id="pdf-button" class="fab-button pdf-fab" aria-label="Save or Print PDF" title="Save or Print PDF">
       <i class="fas fa-file-pdf"></i>
     </button>
   </div>
@@ -346,18 +346,27 @@
   <div id="pdf-modal" class="fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-2000 hidden">
     <div class="bg-white rounded-lg shadow-2xl p-8 max-w-4xl w-full transform transition-all">
       <div class="flex justify-between items-center mb-6">
-        <h2 class="text-2xl font-bold text-gray-800">Create Professional PDF</h2>
+        <h2 class="text-2xl font-bold text-gray-800">Save or Print PDF</h2>
         <button id="close-modal-button" class="text-gray-500 hover:text-gray-800">&times;</button>
       </div>
-      <p class="text-gray-600 mb-6">Select the rows you want to include in your Daily Agenda PDF. Click "Generate PDF" when you're ready.</p>
+      <p class="text-gray-600 mb-4">Select the classes you want in your Daily Agenda, then save the PDF to your device or print it.</p>
+      <div class="mb-3 flex gap-2">
+        <button id="pdf-select-all-button" class="px-3 py-1 text-sm rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Select All</button>
+        <button id="pdf-clear-button" class="px-3 py-1 text-sm rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Clear</button>
+      </div>
       <div id="pdf-selection-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto p-4 bg-gray-50 rounded-lg">
         <!-- Checkbox items will be populated here -->
       </div>
+      <p id="pdf-modal-error" class="mt-4 text-sm font-semibold text-red-600 hidden" role="alert"></p>
       <div class="mt-8 flex justify-end gap-4">
         <button id="cancel-pdf-button" class="px-6 py-2 rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Cancel</button>
-        <button id="generate-pdf-button" class="px-6 py-2 rounded-md text-white flex items-center gap-2" style="background-color: var(--ops-blue);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
-          <i class="fas fa-file-alt"></i>
-          Generate PDF
+        <button id="print-pdf-button" class="px-6 py-2 rounded-md text-white flex items-center gap-2" style="background-color: var(--ops-blue);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
+          <i class="fas fa-print"></i>
+          Print
+        </button>
+        <button id="save-pdf-button" class="px-6 py-2 rounded-md text-white flex items-center gap-2" style="background-color: var(--ops-blue);" onmouseover="this.style.backgroundColor='var(--ops-blue-hover)'" onmouseout="this.style.backgroundColor='var(--ops-blue)'">
+          <i class="fas fa-download"></i>
+          Save
         </button>
       </div>
     </div>
@@ -400,7 +409,6 @@
     const gradeButtons = document.querySelectorAll('.grade-button');
     const activeGradePill = document.getElementById('active-grade-pill');
     const fabContainer = document.getElementById('fab-container');
-    const printButton = document.getElementById('print-button');
     const pdfButton = document.getElementById('pdf-button');
     const archiveButton = document.getElementById('archive-button');
     const calendarAppButton = document.getElementById('calendar-app-button');
@@ -809,12 +817,26 @@
 
     // --- Print and PDF ---
 
-    function printAgendas() {
-      document.querySelectorAll('.agenda-card').forEach(c => c.classList.add('expanded'));
-      setTimeout(() => window.print(), 200);
+    function showPdfModalError(msg) {
+        const errorEl = document.getElementById('pdf-modal-error');
+        errorEl.textContent = msg;
+        errorEl.classList.remove('hidden');
+    }
+
+    function hidePdfModalError() {
+        const errorEl = document.getElementById('pdf-modal-error');
+        errorEl.textContent = '';
+        errorEl.classList.add('hidden');
+    }
+
+    function setAllPdfCheckboxes(checked) {
+        document.querySelectorAll('#pdf-selection-container input[type="checkbox"]')
+            .forEach(cb => { cb.checked = checked; });
+        hidePdfModalError();
     }
 
     function populatePdfModal() {
+        hidePdfModalError();
         const selectionContainer = document.getElementById('pdf-selection-container');
         selectionContainer.innerHTML = '';
         const filteredData = allAgendaData.filter(item => item.GradeLevel === currentGradeFilter);
@@ -895,12 +917,14 @@
     }
 
     // --- PDF GENERATION FUNCTION ---
-    function generatePdf() {
+    // Builds the PDF for the classes checked in the modal. Returns
+    // { doc, filename }, or null (after showing an error) when nothing is checked.
+    function buildPdf() {
         const { jsPDF } = window.jspdf;
         const selectedCheckboxes = document.querySelectorAll('#pdf-selection-container input[type="checkbox"]:checked');
         if (selectedCheckboxes.length === 0) {
-            showMessage('Please select at least one agenda item.', 'error');
-            return;
+            showPdfModalError('Please select at least one class.');
+            return null;
         }
 
         const doc = new jsPDF({ orientation: 'landscape', unit: 'in', format: 'letter' });
@@ -1046,7 +1070,35 @@
             }
         });
 
-        doc.save(`Daily_Agenda_${currentGradeFilter.replace(' ', '_')}_${today.toISOString().slice(0,10)}.pdf`);
+        const filename = `Daily_Agenda_${currentGradeFilter.replace(' ', '_')}_${today.toISOString().slice(0,10)}.pdf`;
+        return { doc, filename };
+    }
+
+    function savePdf() {
+        const pdf = buildPdf();
+        if (!pdf) return false;
+        pdf.doc.save(pdf.filename);
+        return true;
+    }
+
+    // Opens the same PDF that Save produces in a new tab, flagged so the
+    // browser's PDF viewer opens the print dialog as soon as it loads.
+    // window.open must run synchronously inside the click handler, or the
+    // popup blocker will stop it.
+    function printPdf() {
+        const pdf = buildPdf();
+        if (!pdf) return false;
+        pdf.doc.autoPrint();
+        const url = URL.createObjectURL(pdf.doc.output('blob'));
+        const printWindow = window.open(url, '_blank');
+        if (!printWindow) {
+            URL.revokeObjectURL(url);
+            showPdfModalError('Your browser blocked the print window. Allow pop-ups for this page, or use Save and print the file.');
+            return false;
+        }
+        // Give the new tab plenty of time to load the PDF before freeing it.
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+        return true;
     }
 
 
@@ -1082,12 +1134,13 @@
 
       updateCalendarLink();
 
-      printButton.addEventListener('click', printAgendas);
-
       const pdfModal = document.getElementById('pdf-modal');
       const closeModalButton = document.getElementById('close-modal-button');
       const cancelPdfButton = document.getElementById('cancel-pdf-button');
-      const generatePdfButton = document.getElementById('generate-pdf-button');
+      const savePdfButton = document.getElementById('save-pdf-button');
+      const printPdfButton = document.getElementById('print-pdf-button');
+      const selectAllPdfButton = document.getElementById('pdf-select-all-button');
+      const clearPdfButton = document.getElementById('pdf-clear-button');
 
       pdfButton.addEventListener('click', () => {
           populatePdfModal();
@@ -1098,9 +1151,15 @@
       closeModalButton.addEventListener('click', closeTheModal);
       cancelPdfButton.addEventListener('click', closeTheModal);
 
-      generatePdfButton.addEventListener('click', () => {
-          generatePdf();
-          closeTheModal();
+      selectAllPdfButton.addEventListener('click', () => setAllPdfCheckboxes(true));
+      clearPdfButton.addEventListener('click', () => setAllPdfCheckboxes(false));
+
+      // Both keep the modal open on failure so the error stays visible.
+      savePdfButton.addEventListener('click', () => {
+          if (savePdf()) closeTheModal();
+      });
+      printPdfButton.addEventListener('click', () => {
+          if (printPdf()) closeTheModal();
       });
 
       // Archive functionality
