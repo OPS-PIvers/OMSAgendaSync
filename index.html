@@ -350,6 +350,19 @@
         <button id="close-modal-button" class="text-gray-500 hover:text-gray-800">&times;</button>
       </div>
       <p class="text-gray-600 mb-4">Select the classes you want in your Daily Agenda, then save the PDF to your device or print it.</p>
+      <div id="pdf-presets" class="mb-4 p-3 rounded-lg border border-gray-200">
+        <div class="flex flex-wrap items-center gap-2">
+          <label for="pdf-preset-select" class="text-sm font-semibold text-gray-700">My saved groups</label>
+          <select id="pdf-preset-select" class="flex-1 min-w-0 px-2 py-1 text-sm border border-gray-300 rounded-md bg-white"></select>
+          <button id="pdf-preset-delete" class="px-3 py-1 text-sm rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Delete</button>
+        </div>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <label for="pdf-preset-name" class="sr-only">Name for this group</label>
+          <input id="pdf-preset-name" type="text" maxlength="60" placeholder="Name this selection, e.g. Room 214 students" class="flex-1 min-w-0 px-2 py-1 text-sm border border-gray-300 rounded-md">
+          <button id="pdf-preset-save" class="px-3 py-1 text-sm rounded-md text-white" style="background-color: var(--ops-blue);">Save selection</button>
+        </div>
+        <p id="pdf-preset-status" class="mt-2 text-sm text-gray-600" aria-live="polite"></p>
+      </div>
       <div class="mb-3 flex gap-2">
         <button id="pdf-select-all-button" class="px-3 py-1 text-sm rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Select All</button>
         <button id="pdf-clear-button" class="px-3 py-1 text-sm rounded-md text-gray-700 bg-gray-200 hover:bg-gray-300">Clear</button>
@@ -835,6 +848,163 @@
         hidePdfModalError();
     }
 
+    // --- Saved groups (PDF presets) ---
+    // The web app is anonymous, so there is no signed-in user to store these
+    // against on the server. They live in this browser's localStorage instead,
+    // keyed by grade so each grade's dialog only lists its own groups. A class
+    // is identified by grade + class name + teacher, which survives reordering
+    // of the agenda list (checkbox indices do not).
+    const PDF_PRESETS_KEY = 'omsAgendaPdfPresets.v1';
+
+    function pdfClassKey(agenda) {
+        return [agenda.GradeLevel || '', agenda.ClassName || '', agenda.TeacherLastName || ''].join('|');
+    }
+
+    function readPdfPresetStore() {
+        try {
+            const parsed = JSON.parse(window.localStorage.getItem(PDF_PRESETS_KEY) || '{}');
+            return (parsed && typeof parsed === 'object') ? parsed : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    // Returns false when the browser will not store anything (private window,
+    // storage blocked), so the caller can say the group was not saved.
+    function writePdfPresetStore(store) {
+        try {
+            window.localStorage.setItem(PDF_PRESETS_KEY, JSON.stringify(store));
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function gradePresetState(store, grade) {
+        const state = store[grade];
+        return {
+            presets: (state && Array.isArray(state.presets)) ? state.presets : [],
+            lastUsed: (state && state.lastUsed) || ''
+        };
+    }
+
+    function setPdfPresetStatus(msg) {
+        document.getElementById('pdf-preset-status').textContent = msg || '';
+    }
+
+    function pdfCheckboxes() {
+        return Array.from(document.querySelectorAll('#pdf-selection-container input[type="checkbox"]'));
+    }
+
+    function renderPdfPresetOptions(selectedName) {
+        const select = document.getElementById('pdf-preset-select');
+        const { presets } = gradePresetState(readPdfPresetStore(), currentGradeFilter);
+        select.innerHTML = '';
+        select.appendChild(new Option(presets.length ? 'Choose a saved group…' : 'No saved groups yet', ''));
+        presets.forEach(p => select.appendChild(new Option(p.name, p.name)));
+        select.value = presets.some(p => p.name === selectedName) ? selectedName : '';
+        document.getElementById('pdf-preset-delete').disabled = !select.value;
+    }
+
+    // Checks exactly the classes in the named group. Returns the number of
+    // the group's classes that are not on this grade's agendas right now.
+    function applyPdfPreset(name) {
+        const store = readPdfPresetStore();
+        const preset = gradePresetState(store, currentGradeFilter).presets.find(p => p.name === name);
+        if (!preset) return 0;
+        const wanted = new Set(preset.classes);
+        let found = 0;
+        pdfCheckboxes().forEach(cb => {
+            cb.checked = wanted.has(cb.dataset.classKey);
+            if (cb.checked) found++;
+        });
+        hidePdfModalError();
+        return Math.max(0, wanted.size - found);
+    }
+
+    function describeAppliedPreset(name, missing) {
+        let msg = `Using "${name}".`;
+        if (missing === 1) msg += ' 1 class in this group is not on these agendas.';
+        else if (missing > 1) msg += ` ${missing} classes in this group are not on these agendas.`;
+        setPdfPresetStatus(msg);
+    }
+
+    function rememberLastUsedPreset(name) {
+        const store = readPdfPresetStore();
+        const state = gradePresetState(store, currentGradeFilter);
+        store[currentGradeFilter] = { presets: state.presets, lastUsed: name };
+        writePdfPresetStore(store);
+    }
+
+    function onPdfPresetChosen() {
+        const name = document.getElementById('pdf-preset-select').value;
+        document.getElementById('pdf-preset-delete').disabled = !name;
+        rememberLastUsedPreset(name);
+        if (!name) {
+            setPdfPresetStatus('');
+            return;
+        }
+        document.getElementById('pdf-preset-name').value = name;
+        describeAppliedPreset(name, applyPdfPreset(name));
+    }
+
+    function savePdfPreset() {
+        const nameInput = document.getElementById('pdf-preset-name');
+        const name = nameInput.value.trim().replace(/\s+/g, ' ');
+        if (!name) {
+            setPdfPresetStatus('Type a name for this group first.');
+            nameInput.focus();
+            return;
+        }
+        const classes = pdfCheckboxes().filter(cb => cb.checked).map(cb => cb.dataset.classKey);
+        if (classes.length === 0) {
+            setPdfPresetStatus('Check at least one class, then save.');
+            return;
+        }
+        const store = readPdfPresetStore();
+        const state = gradePresetState(store, currentGradeFilter);
+        const existing = state.presets.findIndex(p => p.name.toLowerCase() === name.toLowerCase());
+        const preset = { name, classes };
+        const presets = state.presets.slice();
+        if (existing >= 0) presets[existing] = preset; else presets.push(preset);
+        presets.sort((a, b) => a.name.localeCompare(b.name));
+        store[currentGradeFilter] = { presets, lastUsed: name };
+        if (!writePdfPresetStore(store)) {
+            setPdfPresetStatus('This browser would not save the group. It may be in private or guest mode.');
+            return;
+        }
+        renderPdfPresetOptions(name);
+        const count = classes.length === 1 ? '1 class' : `${classes.length} classes`;
+        setPdfPresetStatus(`${existing >= 0 ? 'Updated' : 'Saved'} "${name}" (${count}). It will be checked for you next time.`);
+    }
+
+    function deletePdfPreset() {
+        const select = document.getElementById('pdf-preset-select');
+        const name = select.value;
+        if (!name) return;
+        const store = readPdfPresetStore();
+        const state = gradePresetState(store, currentGradeFilter);
+        store[currentGradeFilter] = {
+            presets: state.presets.filter(p => p.name !== name),
+            lastUsed: state.lastUsed === name ? '' : state.lastUsed
+        };
+        writePdfPresetStore(store);
+        renderPdfPresetOptions('');
+        document.getElementById('pdf-preset-name').value = '';
+        setPdfPresetStatus(`Deleted "${name}".`);
+    }
+
+    // Called each time the dialog opens: lists this grade's groups and, when
+    // one was used last time, checks its classes so a repeat print is one click.
+    function initPdfPresetsForModal() {
+        const { presets, lastUsed } = gradePresetState(readPdfPresetStore(), currentGradeFilter);
+        const last = presets.some(p => p.name === lastUsed) ? lastUsed : '';
+        renderPdfPresetOptions(last);
+        document.getElementById('pdf-preset-name').value = last;
+        setPdfPresetStatus('');
+        if (last && pdfCheckboxes().length > 0) describeAppliedPreset(last, applyPdfPreset(last));
+    }
+
     function populatePdfModal() {
         hidePdfModalError();
         const selectionContainer = document.getElementById('pdf-selection-container');
@@ -856,6 +1026,7 @@
                     <span class="font-bold">${agenda.ClassName}</span> (${agenda.TeacherLastName})
                 </label>
             `;
+            item.querySelector('input').dataset.classKey = pdfClassKey(agenda);
             selectionContainer.appendChild(item);
         });
     }
@@ -1144,6 +1315,7 @@
 
       pdfButton.addEventListener('click', () => {
           populatePdfModal();
+          initPdfPresetsForModal();
           pdfModal.classList.remove('hidden');
       });
 
@@ -1153,6 +1325,16 @@
 
       selectAllPdfButton.addEventListener('click', () => setAllPdfCheckboxes(true));
       clearPdfButton.addEventListener('click', () => setAllPdfCheckboxes(false));
+
+      document.getElementById('pdf-preset-select').addEventListener('change', onPdfPresetChosen);
+      document.getElementById('pdf-preset-save').addEventListener('click', savePdfPreset);
+      document.getElementById('pdf-preset-delete').addEventListener('click', deletePdfPreset);
+      document.getElementById('pdf-preset-name').addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+              e.preventDefault();
+              savePdfPreset();
+          }
+      });
 
       // Both keep the modal open on failure so the error stays visible.
       savePdfButton.addEventListener('click', () => {
