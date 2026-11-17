@@ -49,6 +49,7 @@ The application finds agenda text by which zone of the slide each text box sits 
 - Several boxes in one zone are joined top to bottom; an empty box counts as found but blank
 - The template's cards, labels and day headers are the slide background image, so only teacher text boxes (and the title) are shapes
 - Fields with no text box in their zone, and decks with no slide for this week, are listed on the "Extraction_Issues" sheet, rewritten every run
+- A row whose Class Name and deck file name disagree about "Enriched" (matched as a whole word in any case: ENR, Enr, Enriched, Enrichment) is also listed there (`enrichedDeckMismatch`). The agenda is still extracted; the entry is the warning that a deck link was pasted into the wrong row, which is how Stanley's Regular and Enriched cards swapped in fall 2026
 - The system preserves hyperlinks by converting them to Google Sheets HYPERLINK formulas
 
 ## Development Commands
