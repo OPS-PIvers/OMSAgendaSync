@@ -253,6 +253,32 @@ function combineZoneShapes(shapes) {
 }
 
 /**
+ * Matches an "enriched" label in a class name or a deck's file name. Teachers
+ * write it as ENR, Enr, ENRICHED, Enriched or Enrichment, so the match ignores
+ * case. It must be a whole word, so a name like "Henry" never counts.
+ * @type {RegExp}
+ */
+const ENRICHED_LABEL_PATTERN = /\benr(?:ich(?:ed|ment)?)?\b/i;
+
+/**
+ * Checks a Presentation_IDs row against the deck it points to. An Enriched
+ * class should point to a deck whose file name says Enriched, and a regular
+ * class should not. A deck ID pasted into the wrong row swaps two classes on
+ * the Snapshot with nothing else to show for it, so this is what catches it.
+ * @param {string} className The row's Class Name, e.g. "Enriched English".
+ * @param {string} deckTitle The file name of the deck the row points to.
+ * @returns {?string} A problem for the issues sheet, or null if they agree.
+ */
+function enrichedDeckMismatch(className, deckTitle) {
+  const rowIsEnriched = ENRICHED_LABEL_PATTERN.test(className);
+  const deckIsEnriched = ENRICHED_LABEL_PATTERN.test(deckTitle);
+  if (rowIsEnriched === deckIsEnriched) return null;
+  return rowIsEnriched
+    ? `Class is Enriched but the deck "${deckTitle}" is not named Enriched. The deck link may be in the wrong row.`
+    : `Class is not Enriched but the deck "${deckTitle}" is named Enriched. The deck link may be in the wrong row.`;
+}
+
+/**
  * Rewrites the issues sheet with the fields the latest extraction run could
  * not find, creating the sheet on first use. An empty list leaves just the
  * header row, so a clean sheet means every teacher's agenda was found.
@@ -380,6 +406,17 @@ function extractTextForCurrentDayAgenda(dayToTest) {
 
     try {
       const presentation = SlidesApp.openById(presentationId.trim());
+
+      // Logged only: the agenda is still extracted, since the row may be right
+      // and the deck just oddly named.
+      const deckMismatch = enrichedDeckMismatch(className, presentation.getName());
+      if (deckMismatch) {
+        issues.push([
+          runTimestamp, teacherLastName.trim(), className.trim(), dayOfWeek, 'Deck',
+          deckMismatch, `https://docs.google.com/presentation/d/${presentationId.trim()}/edit`
+        ]);
+      }
+
       const slides = presentation.getSlides();
 
       if (slides.length === 0) {
